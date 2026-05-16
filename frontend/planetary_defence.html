@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PLANETARY DEFENCE OFFICER — ESA NEOCC</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
+
+  /* ============ PALETTE — PLANETARY DEFENCE OFFICER ============ */
+  :root {
+    --bg:        #000000;   /* near-black background                */
+    --surface:   #080808;   /* panels, dossier backgrounds          */
+    --border:    #1a1a1a;   /* dividers, faint frames               */
+    --border-2:  #363636;   /* prominent frames, panel edges        */
+    --dim:       #444444;   /* tertiary text, decorative            */
+    --muted:     #707070;   /* secondary text, labels               */
+    --text:      #c0c0c0;   /* primary readout text                 */
+    --bright:    #dedede;   /* active element text                  */
+    --white:     #f0f0f0;   /* logo, header, top-level emphasis     */
+
+    /* Semantic accents */
+    --ok:        #6aac79;   /* SAFE verdict                         */
+    --warn:      #c8a235;   /* MONITOR verdict                      */
+    --crit:      #c84040;   /* DANGEROUS verdict, PHA confirmed     */
+    --redacted:  #2a2d35;   /* blacked-out field background         */
+
+    --font-mono: 'Share Tech Mono', 'Courier New', monospace;
+    --font-vt:   'VT323', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%; height: 100dvh; overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.4;
+    cursor: default;
+    user-select: none;
+  }
+
+  /* ============ VHS / CRT — AGGRESSIVE ============ */
+
+  /* chromatic aberrations */
+  #app {
+    filter: url(#vhs-chroma);
+  }
+
+  /* main overlay */
+  .vhs-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    pointer-events: none;
+
+    /* dark horizontal strings */
+    background: repeating-linear-gradient(
+      0deg,
+      transparent            0px,
+      transparent            2px,
+      rgba(0, 0, 0, 0.22)    2px,
+      rgba(0, 0, 0, 0.22)    3px
+    );
+  }
+
+  /* RGB vertical strings */
+  .vhs-overlay::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      90deg,
+      rgba(255,  0, 20, 0.10) 0px,
+      rgba(255,  0, 20, 0.10) 1px,
+      rgba(  0,255,  0, 0.05) 1px,
+      rgba(  0,255,  0, 0.05) 2px,
+      rgba(  0, 20,255, 0.10) 2px,
+      rgba(  0, 20,255, 0.10) 3px,
+      transparent             3px,
+      transparent             6px
+    );
+    mix-blend-mode: screen;
+    animation: vhsShift 0.18s steps(3) infinite;
+  }
+
+  /* white scan-line bar */
+  .vhs-overlay::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0;
+    height: 5px;
+    background: linear-gradient(
+      transparent,
+      rgba(255,255,255, 0.35) 50%,
+      transparent
+    );
+    filter: blur(2px);
+    opacity: 0;
+    animation: vhsScan 7s linear infinite;
+  }
+
+  /* radial vignette */
+  body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 9998;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center,
+      transparent 55%, rgba(0,0,0,0.30) 100%);
+  }
+
+  /* ============ Animations ============ */
+  @keyframes vhsShift {
+    0%   { transform: translateX(0px);  opacity: 0.55; }
+    33%  { transform: translateX(-4px); opacity: 0.70; }
+    66%  { transform: translateX( 3px); opacity: 0.45; }
+    100% { transform: translateX(0px);  opacity: 0.55; }
+  }
+
+  @keyframes vhsScan {
+    0%   { top: -1%;   opacity: 0;    }
+    4%   { opacity: 1; }
+    50%  { opacity: 0.5; }
+    96%  { opacity: 0.9; }
+    100% { top: 102%;  opacity: 0;   }
+  }
+
+  /* ============ PLACEHOLDER — Phase 0 only ============ */
+  #app {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .init-msg {
+    font-family: var(--font-vt);
+    font-size: 28px;
+    color: var(--dim);
+    letter-spacing: 3px;
+    text-align: center;
+  }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border-2); }
+</style>
+</head>
+<body>
+
+<!-- VHS SVG Chromatic Aberration Filter -->
+<svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+  <defs>
+    <filter id="vhs-chroma" x="-5%" y="-5%" width="110%" height="110%"
+            color-interpolation-filters="sRGB">
+      <!-- R channel shifted left -->
+      <feColorMatrix in="SourceGraphic" type="matrix"
+        values="1 0 0 0 0
+                0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 1 0" result="r"/>
+      <feOffset in="r" dx="-1" dy="0" result="rOff"/>
+      <!-- G channel in place -->
+      <feColorMatrix in="SourceGraphic" type="matrix"
+        values="0 0 0 0 0
+                0 1 0 0 0
+                0 0 0 0 0
+                0 0 0 1 0" result="g"/>
+      <!-- B channel shifted right -->
+      <feColorMatrix in="SourceGraphic" type="matrix"
+        values="0 0 0 0 0
+                0 0 0 0 0
+                0 0 1 0 0
+                0 0 0 1 0" result="b"/>
+      <feOffset in="b" dx="1" dy="0" result="bOff"/>
+      <!-- composite -->
+      <feBlend in="rOff" in2="g"   mode="screen" result="rg"/>
+      <feBlend in="rg"  in2="bOff" mode="screen"/>
+    </filter>
+  </defs>
+</svg>
+
+<div class="vhs-overlay" aria-hidden="true"></div>
+
+<div id="app">
+  <div class="init-msg">PLANETARY DEFENCE OFFICER<br>[ SYSTEM INITIALISING ]</div>
+</div>
+
+</body>
+</html>

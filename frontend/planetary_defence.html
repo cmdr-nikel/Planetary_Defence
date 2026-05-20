@@ -21,7 +21,8 @@
     --ok:        #6aac79;
     --warn:      #c8a235;
     --crit:      #c84040;
-    --redacted:  #2a2d35;
+    --redacted:      #2a2d35;
+    --redacted-text: #555870;
     --font-mono: 'Share Tech Mono', 'Courier New', monospace;
     --font-vt:   'VT323', monospace;
   }
@@ -282,6 +283,30 @@
   }
   .ws-slot-filled { color: var(--text); }
   .ws-slot.has-data { border-color: var(--muted); }
+
+  /* ── Timer bars ── */
+  .timer-wrap {
+    display: flex; align-items: center; gap: 6px; margin-top: 4px;
+  }
+  .timer-bar {
+    flex: 1; height: 2px; background: var(--border);
+  }
+  .timer-fill {
+    height: 100%; transition: width 0.5s linear, background 0.5s;
+  }
+  .timer-text {
+    font-size: 10px; letter-spacing: 1px; min-width: 36px; text-align: right;
+    transition: color 0.5s;
+  }
+
+  /* Worksheet approach window bar */
+  .ws-timer-row {
+    margin-top: 6px; display: flex; align-items: center; gap: 8px;
+  }
+  .ws-timer-label { font-size: 9px; letter-spacing: 2px; color: var(--dim); }
+  .ws-timer-bar   { flex: 1; height: 3px; background: var(--border); }
+  .ws-timer-fill  { height: 100%; transition: width 0.5s linear, background 0.5s; }
+  .ws-timer-text  { font-size: 11px; letter-spacing: 1px; min-width: 40px; text-align: right; font-family: var(--font-mono); }
 
   /* ── Feed row carry states ── */
   .feed-row.carrying { opacity: 0.45; }
@@ -575,8 +600,19 @@
         <!-- shown when a dossier is active -->
         <div id="ws-dossier-content" style="display:none; flex-direction:column; height:100%; overflow:hidden;">
           <div class="worksheet-header">
-            <div class="ws-dossier-label">ACTIVE DOSSIER</div>
-            <div class="ws-dossier-id" id="ws-dossier-id">—</div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <div>
+                <div class="ws-dossier-label">ACTIVE DOSSIER</div>
+                <div class="ws-dossier-id" id="ws-dossier-id">—</div>
+              </div>
+              <div style="text-align:right">
+                <div class="ws-dossier-label">APPROACH WINDOW</div>
+                <div class="ws-timer-text" id="ws-timer-text" style="color:var(--dim)">—</div>
+              </div>
+            </div>
+            <div class="ws-timer-row">
+              <div class="ws-timer-bar"><div class="ws-timer-fill" id="ws-timer-fill" style="width:100%"></div></div>
+            </div>
           </div>
 
           <div class="ws-slots">
@@ -802,9 +838,9 @@
 //  CONFIG
 // ═══════════════════════════════════════════════════════════════════
 const LEVELS = {
-  1: { dossierCount: 1, feedInterval: 4000 },
-  2: { dossierCount: 3, feedInterval: 2000 },
-  3: { dossierCount: 6, feedInterval: 1200 },
+  1: { dossierCount: 1, feedInterval: 4000, approachWindow: 180000, redactedRate: 0,   syntheticRate: 0   },
+  2: { dossierCount: 3, feedInterval: 2000, approachWindow: 90000,  redactedRate: 0,   syntheticRate: 0.2 },
+  3: { dossierCount: 6, feedInterval: 1200, approachWindow: 60000,  redactedRate: 0.15, syntheticRate: 0.4 },
 };
 
 const DOC_TYPES = ['orbital', 'proximity', 'physical', 'probability'];
@@ -824,6 +860,7 @@ const state = {
   carriedFragment: null,
   score:           { correct: 0, caution: 0, miss: 0, critical: 0, wrongFragments: 0 },
   feedTimer:       null,
+  timerInterval:   null,
   feedAutoScroll:  true,
 };
 
@@ -903,14 +940,16 @@ async function loadPool() {
 // ═══════════════════════════════════════════════════════════════════
 //  FRAGMENT FIELD FORMATTING
 // ═══════════════════════════════════════════════════════════════════
-function formatFields(docType, fields) {
+function formatFields(docType, fields, redact = false) {
   const f = fields[docType];
   if (!f) return '—';
   switch (docType) {
     case 'orbital':
       return `a=${f.a.toFixed(3)} e=${f.e.toFixed(3)} i=${f.i.toFixed(2)}° q=${f.q.toFixed(3)} Q=${f.Q.toFixed(3)}`;
-    case 'proximity':
-      return `MOID=${f.moid.toFixed(4)}AU Vrel=${f.rel_v.toFixed(2)}km/s CA=${f.close_approach}`;
+    case 'proximity': {
+      const moidStr = redact ? `<span style="color:var(--redacted-text);background:var(--redacted);padding:0 3px">░░░░░░</span>` : `${f.moid.toFixed(4)}AU`;
+      return `MOID=${moidStr} Vrel=${f.rel_v.toFixed(2)}km/s CA=${f.close_approach}`;
+    }
     case 'physical':
       return `H=${f.H.toFixed(1)} D=${f.diameter_min.toFixed(3)}–${f.diameter_max.toFixed(3)}km`;
     case 'probability':
@@ -1005,10 +1044,21 @@ function renderDossierList() {
       pips += `<div class="dossier-slot-pip${filled}"></div>`;
     }
 
+    const timerHtml = dossier.timer ? (() => {
+      const rem = timerRemaining(dossier);
+      const frac = rem / dossier.timer.duration;
+      const col  = timerColor(frac);
+      return `<div class="timer-wrap">` +
+        `<div class="timer-bar"><div class="timer-fill" id="timer-fill-${id}" style="width:${(frac*100).toFixed(1)}%;background:${col}"></div></div>` +
+        `<span class="timer-text" id="timer-text-${id}" style="color:${col}">${timerText(rem)}</span>` +
+        `</div>`;
+    })() : '';
+
     item.innerHTML =
       `<div class="dossier-id">${id}</div>` +
       `<div class="dossier-meta">${dossier.status.toUpperCase()} · ${filledCount}/4 slots</div>` +
-      `<div class="dossier-slots">${pips}</div>`;
+      `<div class="dossier-slots">${pips}</div>` +
+      timerHtml;
 
     view.appendChild(item);
   });
@@ -1021,6 +1071,18 @@ function selectDossier(id) {
   if (state.cameraScreen === 'worksheet') renderWorksheet();
   updateVerdictButtons();
   setStatus(`ACTIVE DOSSIER: ${id}`);
+
+  // Immediately sync worksheet timer to the newly selected dossier
+  const dossier = state.dossiers.get(id);
+  if (dossier && dossier.status === 'pending') {
+    const rem  = timerRemaining(dossier);
+    const frac = rem / dossier.timer.duration;
+    const col  = timerColor(frac);
+    const wsFill = document.getElementById('ws-timer-fill');
+    const wsText = document.getElementById('ws-timer-text');
+    if (wsFill) { wsFill.style.width = `${(frac * 100).toFixed(1)}%`; wsFill.style.background = col; }
+    if (wsText) { wsText.textContent = timerText(rem); wsText.style.color = col; }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1060,9 +1122,11 @@ function emitFragment() {
 
   chosen.emittedTypes.add(chosenType);
 
-  const obj  = chosen.object;
-  const src  = obj.source_attribution[chosenType];
-  const fieldStr = formatFields(chosenType, obj.fields);
+  const obj    = chosen.object;
+  const src    = obj.source_attribution[chosenType];
+  const cfg    = LEVELS[state.shift.level];
+  const redact = chosenType === 'proximity' && Math.random() < cfg.redactedRate;
+  const fieldStr = formatFields(chosenType, obj.fields, redact);
 
   const fragment = {
     id:        fragmentCounter++,
@@ -1071,6 +1135,7 @@ function emitFragment() {
     object_id: obj.object_id,
     doc_type:  chosenType,
     fieldStr,
+    isRedacted: redact,
     payload:   { source: src, object_id: obj.object_id, doc_type: chosenType, fields: obj.fields[chosenType] },
   };
 
@@ -1088,10 +1153,8 @@ function startShift(level) {
   }
 
   // Stop existing shift if running
-  if (state.feedTimer) {
-    clearInterval(state.feedTimer);
-    state.feedTimer = null;
-  }
+  if (state.feedTimer)    { clearInterval(state.feedTimer);    state.feedTimer    = null; }
+  if (state.timerInterval){ clearInterval(state.timerInterval); state.timerInterval = null; }
 
   const cfg = LEVELS[level];
   state.shift.level     = level;
@@ -1111,28 +1174,29 @@ function startShift(level) {
   // Clear feed display
   document.getElementById('feed-scroll').innerHTML = '';
 
-  // Pick dossier objects: guarantee at least 1 real hazardous in any shift
-  const hazardous = state.pool.filter(o => !o.is_synthetic && o.true_class === 'hazardous');
-  const safe      = state.pool.filter(o => o.true_class === 'safe');
-  const synthetic = state.pool.filter(o => o.is_synthetic);
+  // Pick dossiers respecting syntheticRate — guarantee 1 real PHA
+  const shuffled  = arr => arr.slice().sort(() => Math.random() - 0.5);
+  const hazardous = shuffled(state.pool.filter(o => !o.is_synthetic && o.true_class === 'hazardous'));
+  const safe      = shuffled(state.pool.filter(o => o.true_class === 'safe'));
+  const synthetic = shuffled(state.pool.filter(o => o.is_synthetic));
 
-  const shuffled = arr => arr.slice().sort(() => Math.random() - 0.5);
+  const remaining  = cfg.dossierCount - 1;
+  const nSynthetic = Math.round(remaining * cfg.syntheticRate);
+  const nSafe      = remaining - nSynthetic;
 
-  let picked = [];
-  picked.push(shuffled(hazardous)[0]);                          // guaranteed 1 real PHA
-  const rest = shuffled([...safe, ...synthetic]);
-  while (picked.length < cfg.dossierCount && rest.length > 0) {
-    picked.push(rest.shift());
-  }
-  picked = shuffled(picked);                                    // randomise order
+  let picked = [hazardous[0]];
+  picked = picked.concat(safe.slice(0, nSafe), synthetic.slice(0, nSynthetic));
+  picked = shuffled(picked).slice(0, cfg.dossierCount);
 
+  const now = Date.now();
   for (const obj of picked) {
     state.dossiers.set(obj.object_id, {
-      object:        obj,
-      emittedTypes:  new Set(),
-      pastedSlots:   { orbital: null, proximity: null, physical: null, probability: null },
-      status:        'pending',
+      object:         obj,
+      emittedTypes:   new Set(),
+      pastedSlots:    { orbital: null, proximity: null, physical: null, probability: null },
+      status:         'pending',
       wrongFragments: 0,
+      timer:          { startTime: now, duration: cfg.approachWindow },
     });
   }
 
@@ -1140,9 +1204,10 @@ function startShift(level) {
   renderMonitorScreen();
   switchTab('dossiers');
 
-  // Start feed
+  // Start feed + timer loop
   emitFragment();
-  state.feedTimer = setInterval(emitFragment, cfg.feedInterval);
+  state.feedTimer     = setInterval(emitFragment, cfg.feedInterval);
+  state.timerInterval = setInterval(updateTimers, 500);
 
   setStatus(`LEVEL ${level} SHIFT ACTIVE — ${cfg.dossierCount} DOSSIER${cfg.dossierCount > 1 ? 'S' : ''} ASSIGNED`, 'ok');
 }
@@ -1263,14 +1328,25 @@ function renderMonitorScreen() {
       `<div class="dossier-slot-pip${dossier.pastedSlots[t] ? ' filled' : ''}"></div>`
     ).join('');
     const readyStyle = filled >= 2 ? 'color:var(--ok)' : 'color:var(--dim)';
+    let timerHtml = '';
+    if (dossier.timer) {
+      const rem  = timerRemaining(dossier);
+      const frac = rem / dossier.timer.duration;
+      const col  = timerColor(frac);
+      timerHtml = `<div class="timer-wrap" style="margin-top:5px">` +
+        `<div class="timer-bar"><div class="timer-fill" id="mcard-fill-${id}" style="width:${(frac*100).toFixed(1)}%;background:${col}"></div></div>` +
+        `<span class="timer-text" id="mcard-text-${id}" style="color:${col}">${timerText(rem)}</span>` +
+        `</div>`;
+    }
 
     html += `
       <div class="monitor-card${isActive ? ' active' : ''}" onclick="selectDossier('${id}')">
         <div class="monitor-card-header">
           <span class="monitor-card-id">${id}</span>
-          <span class="monitor-card-status" style="${readyStyle}">${filled >= 2 ? 'READY FOR VERDICT' : dossier.status.toUpperCase()}</span>
+          <span class="monitor-card-status" style="${readyStyle}">${filled >= 2 ? 'READY' : dossier.status.toUpperCase()}</span>
         </div>
         <div class="monitor-card-slots">${pips}</div>
+        ${timerHtml}
       </div>`;
   });
 
@@ -1390,7 +1466,7 @@ function submitVerdict(verdict) {
 // ═══════════════════════════════════════════════════════════════════
 //  REVEAL PANEL
 // ═══════════════════════════════════════════════════════════════════
-function showReveal(dossier, verdict, outcome) {
+function showReveal(dossier, verdict, outcome, isTimeout = false) {
   const obj = dossier.object;
 
   const outcomeSubtitles = {
@@ -1400,11 +1476,16 @@ function showReveal(dossier, verdict, outcome) {
     critical: 'CRITICAL MISS — THREAT UNDETECTED',
   };
 
-  document.getElementById('reveal-outcome-word').textContent = outcome.toUpperCase();
-  document.getElementById('reveal-outcome-word').className   = `reveal-outcome-word ${outcome}`;
-  document.getElementById('reveal-outcome-sub').textContent  = outcomeSubtitles[outcome];
+  const outcomeWord = isTimeout ? 'TIMEOUT' : outcome.toUpperCase();
+  const outcomeSub  = isTimeout
+    ? (outcome === 'critical' ? 'APPROACH WINDOW CLOSED — HAZARDOUS OBJECT UNRESOLVED' : 'APPROACH WINDOW CLOSED')
+    : outcomeSubtitles[outcome];
+  const outcomeClass = isTimeout ? (outcome === 'critical' ? 'critical' : 'miss') : outcome;
 
-  // Object fields
+  document.getElementById('reveal-outcome-word').textContent = outcomeWord;
+  document.getElementById('reveal-outcome-word').className   = `reveal-outcome-word ${outcomeClass}`;
+  document.getElementById('reveal-outcome-sub').textContent  = outcomeSub;
+
   document.getElementById('rv-id').textContent = obj.object_id;
 
   const tcText  = obj.true_class === 'hazardous' ? 'HAZARDOUS' : 'SAFE';
@@ -1415,24 +1496,21 @@ function showReveal(dossier, verdict, outcome) {
   document.getElementById('rv-synth').textContent = obj.is_synthetic ? 'YES — borderline-SMOTE' : 'NO — real NEO';
   document.getElementById('rv-synth').className   = `reveal-val ${obj.is_synthetic ? 'warn' : ''}`;
 
-  // Model fields
   const predText  = obj.model_prediction === 'hazardous' ? 'HAZARDOUS' : 'SAFE';
   const predClass = obj.model_prediction === 'hazardous' ? 'crit' : 'ok';
   document.getElementById('rv-pred').textContent = predText;
   document.getElementById('rv-pred').className   = `reveal-val ${predClass}`;
   document.getElementById('rv-conf').textContent = `${(obj.model_confidence * 100).toFixed(1)}%`;
 
-  // Verdict fields
   const vLabels = { safe: 'SAFE', monitor: 'MONITOR', dangerous: 'DANGEROUS' };
   const vClass  = { safe: 'ok',   monitor: 'warn',    dangerous: 'crit'      };
-  document.getElementById('rv-verdict').textContent = vLabels[verdict];
-  document.getElementById('rv-verdict').className   = `reveal-val ${vClass[verdict]}`;
+  document.getElementById('rv-verdict').textContent = isTimeout ? 'NO VERDICT — TIMEOUT' : vLabels[verdict];
+  document.getElementById('rv-verdict').className   = `reveal-val ${isTimeout ? 'crit' : vClass[verdict]}`;
 
   const oClass = { correct: 'ok', caution: 'warn', miss: 'crit', critical: 'crit' };
   document.getElementById('rv-outcome').textContent = outcome.toUpperCase();
   document.getElementById('rv-outcome').className   = `reveal-val ${oClass[outcome]}`;
 
-  // Wrong fragments
   const wrongEl = document.getElementById('rv-wrong-block');
   document.getElementById('rv-wrong-count').textContent = dossier.wrongFragments;
   wrongEl.className = `reveal-wrong-fragments${dossier.wrongFragments > 0 ? ' has-wrong' : ''}`;
@@ -1449,6 +1527,12 @@ function dismissReveal() {
     state.dossiers.delete(id);
     state.activeDossierId = null;
   }
+
+  // Reset worksheet timer to idle state
+  const wsFill = document.getElementById('ws-timer-fill');
+  const wsText = document.getElementById('ws-timer-text');
+  if (wsFill) { wsFill.style.width = '100%'; wsFill.style.background = 'var(--border)'; }
+  if (wsText) { wsText.textContent = '—'; wsText.style.color = 'var(--dim)'; }
 
   ['safe', 'monitor', 'dangerous'].forEach(v =>
     document.getElementById(`vbtn-${v}`).disabled = true
@@ -1485,7 +1569,91 @@ function drawNextDossier() {
     pastedSlots:    { orbital: null, proximity: null, physical: null, probability: null },
     status:         'pending',
     wrongFragments: 0,
+    timer:          { startTime: Date.now(), duration: LEVELS[state.shift.level].approachWindow },
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  TIMER SYSTEM
+// ═══════════════════════════════════════════════════════════════════
+function timerRemaining(dossier) {
+  return Math.max(0, dossier.timer.duration - (Date.now() - dossier.timer.startTime));
+}
+
+function timerColor(fraction) {
+  if (fraction > 0.5) return 'var(--ok)';
+  if (fraction > 0.25) return 'var(--warn)';
+  return 'var(--crit)';
+}
+
+function timerText(ms) {
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function updateTimers() {
+  if (!state.shift.active) return;
+
+  const expired = [];
+
+  for (const [id, dossier] of state.dossiers) {
+    if (dossier.status !== 'pending') continue;
+
+    const rem  = timerRemaining(dossier);
+    const frac = rem / dossier.timer.duration;
+    const col  = timerColor(frac);
+    const txt  = timerText(rem);
+
+    // Dossier list timers
+    const fillEl = document.getElementById(`timer-fill-${id}`);
+    const textEl = document.getElementById(`timer-text-${id}`);
+    if (fillEl) { fillEl.style.width = `${(frac * 100).toFixed(1)}%`; fillEl.style.background = col; }
+    if (textEl) { textEl.textContent = txt; textEl.style.color = col; }
+
+    // Monitor screen card timers
+    const mcFill = document.getElementById(`mcard-fill-${id}`);
+    const mcText = document.getElementById(`mcard-text-${id}`);
+    if (mcFill) { mcFill.style.width = `${(frac * 100).toFixed(1)}%`; mcFill.style.background = col; }
+    if (mcText) { mcText.textContent = txt; mcText.style.color = col; }
+
+    // Worksheet header timer (active dossier only)
+    if (id === state.activeDossierId) {
+      const wsFill = document.getElementById('ws-timer-fill');
+      const wsText = document.getElementById('ws-timer-text');
+      if (wsFill) { wsFill.style.width = `${(frac * 100).toFixed(1)}%`; wsFill.style.background = col; }
+      if (wsText) { wsText.textContent = txt; wsText.style.color = col; }
+    }
+
+    if (rem === 0) expired.push(id);
+  }
+
+  expired.forEach(handleTimeout);
+}
+
+function handleTimeout(id) {
+  const dossier = state.dossiers.get(id);
+  if (!dossier || dossier.status !== 'pending') return;
+
+  const outcome = computeOutcome('monitor', dossier.object.true_class);
+  dossier.status = 'timeout';
+
+  if (outcome === 'critical') state.score.critical++;
+  else state.score[outcome]++;
+
+  if (id === state.activeDossierId) {
+    showReveal(dossier, null, outcome, true);
+  } else {
+    // Not the active dossier — clean it up silently
+    state.usedObjectIds.add(id);
+    state.dossiers.delete(id);
+    drawNextDossier();
+    renderDossierList();
+    renderMonitorScreen();
+    const rem = state.dossiers.size;
+    setStatus(rem > 0 ? `DOSSIER EXPIRED — ${rem} ACTIVE` : 'ALL DOSSIERS CLOSED');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════

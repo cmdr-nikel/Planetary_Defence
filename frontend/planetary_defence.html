@@ -12,12 +12,12 @@
     --bg:        #000000;
     --surface:   #080808;
     --border:    #1a1a1a;
-    --border-2:  #363636;
-    --dim:       #444444;
-    --muted:     #707070;
-    --text:      #c0c0c0;
-    --bright:    #dedede;
-    --white:     #f0f0f0;
+    --border-2:  #3a3a3a;
+    --dim:       #555555;
+    --muted:     #888888;
+    --text:      #cccccc;
+    --bright:    #e8e8e8;
+    --white:     #f4f4f4;
     --ok:        #6aac79;
     --warn:      #c8a235;
     --crit:      #c84040;
@@ -147,17 +147,18 @@
     letter-spacing: 1px; line-height: 2;
   }
   .feed-row {
-    padding: 2px 10px; cursor: pointer;
+    padding: 3px 10px 4px; cursor: pointer;
     border-left: 2px solid transparent;
     transition: background 0.08s;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .feed-row:hover { background: #0d0d0d; border-left-color: var(--border-2); }
+  .feed-row-line1 { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .feed-row-line2 { font-size: 11px; color: var(--text); padding-left: 2px; margin-top: 1px; word-break: break-all; }
   .feed-ts    { color: var(--dim); }
-  .feed-dim   { color: var(--border-2); }
-  .feed-src   { color: var(--text); }
-  .feed-objid { color: var(--bright); }
-  .feed-data  { color: var(--muted); }
+  .feed-dim   { color: var(--dim); }
+  .feed-src   { color: var(--muted); }
+  .feed-objid { color: var(--bright); font-weight: normal; }
+  .feed-data  { color: var(--text); }
 
   /* ============ MAIN VIEW — CAMERA SYSTEM ============ */
   #main-view {
@@ -180,6 +181,7 @@
     width: 50%; height: 100%;
     flex-shrink: 0; overflow: hidden;
     display: flex; flex-direction: column;
+    position: relative;
   }
 
   /* ── SCREEN 1 — MONITORING ── */
@@ -190,6 +192,12 @@
   }
   .screen-label { color: var(--dim); }
   .monitor-body {
+    flex: 1; overflow-y: auto;
+    padding: 16px 20px;
+    display: flex; flex-direction: column;
+    align-items: center;
+  }
+  .monitor-idle {
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     color: var(--dim); font-size: 11px; letter-spacing: 2px;
@@ -198,6 +206,29 @@
   .monitor-art {
     font-family: var(--font-vt); font-size: 48px;
     color: var(--border-2); letter-spacing: 8px; line-height: 1.1;
+  }
+  .monitor-shift-label {
+    font-size: 9px; letter-spacing: 3px; color: var(--dim);
+    margin-bottom: 14px; text-align: center;
+  }
+  .monitor-card {
+    width: 100%; max-width: 420px;
+    border: 1px solid var(--border-2); padding: 10px 14px;
+    margin-bottom: 6px; cursor: pointer; transition: all 0.12s;
+  }
+  .monitor-card:hover { border-color: var(--muted); background: #0d0d0d; }
+  .monitor-card.active { border-color: var(--bright); background: #0a0a0a; }
+  .monitor-card-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 5px;
+  }
+  .monitor-card-id { font-size: 13px; letter-spacing: 1px; color: var(--bright); }
+  .monitor-card.active .monitor-card-id { color: var(--white); }
+  .monitor-card-status { font-size: 9px; letter-spacing: 2px; color: var(--dim); }
+  .monitor-card-slots { display: flex; gap: 4px; }
+  .monitor-hint {
+    margin-top: 16px; font-size: 10px; color: var(--dim);
+    letter-spacing: 1px; text-align: center; line-height: 1.8;
   }
 
   /* ── SCREEN 2 — WORKSHEET ── */
@@ -295,7 +326,6 @@
     background: var(--bg);
     display: none; flex-direction: column;
     padding: 20px 24px; overflow-y: auto;
-    border-left: 1px solid var(--border-2);
   }
   #reveal-panel.show { display: flex; }
 
@@ -516,11 +546,12 @@
           <span><span class="screen-label">◈ SCREEN 1 —</span> MONITORING</span>
           <button class="btn" onclick="switchCamera('worksheet')">WORKSHEET ›</button>
         </div>
-        <div class="monitor-body">
-          <div class="monitor-art">⊙<br>◉ ● ●</div>
-          <div>NO ACTIVE SESSION</div>
-          <div style="color:var(--dim);font-size:10px;margin-top:4px">
-            start a shift · select a dossier · watch the feed
+        <div class="monitor-body" id="monitor-body">
+          <!-- populated by renderMonitorScreen() -->
+          <div class="monitor-idle">
+            <div class="monitor-art">⊙<br>◉ ● ●</div>
+            <div>NO ACTIVE SESSION</div>
+            <div style="color:var(--dim);font-size:10px;margin-top:4px">start a shift to begin</div>
           </div>
         </div>
       </div>
@@ -917,12 +948,15 @@ function appendFeedRow(fragment) {
   row.className = 'feed-row';
   row.dataset.fragmentId = fragment.id;
   row.innerHTML =
-    `<span class="feed-ts">[${ts}]</span> ` +
-    `<span class="feed-src">${srcPad(source)}</span>` +
-    `<span class="feed-dim"> // </span>` +
-    `<span class="feed-objid">${object_id}</span>` +
-    `<span class="feed-dim"> [${docTypeLabel(doc_type)}] // </span>` +
-    `<span class="feed-data">${fieldStr}</span>`;
+    `<div class="feed-row-line1">` +
+      `<span class="feed-ts">[${ts}]</span>` +
+      `<span class="feed-dim"> · </span>` +
+      `<span class="feed-src">${source}</span>` +
+      `<span class="feed-dim"> · </span>` +
+      `<span class="feed-objid">${object_id}</span>` +
+      `<span class="feed-dim"> [${docTypeLabel(doc_type)}]</span>` +
+    `</div>` +
+    `<div class="feed-row-line2">${fieldStr}</div>`;
   row.onclick = () => pickupFragment(fragment);
 
   state.fragmentMap.set(fragment.id, fragment);
@@ -983,6 +1017,7 @@ function renderDossierList() {
 function selectDossier(id) {
   state.activeDossierId = id;
   renderDossierList();
+  renderMonitorScreen();
   if (state.cameraScreen === 'worksheet') renderWorksheet();
   updateVerdictButtons();
   setStatus(`ACTIVE DOSSIER: ${id}`);
@@ -1102,6 +1137,7 @@ function startShift(level) {
   }
 
   renderDossierList();
+  renderMonitorScreen();
   switchTab('dossiers');
 
   // Start feed
@@ -1200,6 +1236,53 @@ document.addEventListener('keydown', e => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+//  MONITORING SCREEN
+// ═══════════════════════════════════════════════════════════════════
+function renderMonitorScreen() {
+  const body = document.getElementById('monitor-body');
+  if (!body) return;
+
+  if (!state.shift.active || state.dossiers.size === 0) {
+    body.innerHTML = `
+      <div class="monitor-idle">
+        <div class="monitor-art">⊙<br>◉ ● ●</div>
+        <div>NO ACTIVE SESSION</div>
+        <div style="color:var(--dim);font-size:10px;margin-top:4px">start a shift to begin</div>
+      </div>`;
+    return;
+  }
+
+  const cfg = LEVELS[state.shift.level];
+  const lvlNames = { 1: 'ORIENTATION', 2: 'OPERATIONAL', 3: 'CRISIS' };
+  let html = `<div class="monitor-shift-label">LEVEL ${state.shift.level} — ${lvlNames[state.shift.level]} · ${cfg.feedInterval / 1000}s/fragment · ${cfg.dossierCount} DOSSIER${cfg.dossierCount > 1 ? 'S' : ''}</div>`;
+
+  state.dossiers.forEach((dossier, id) => {
+    const isActive = id === state.activeDossierId;
+    const filled   = Object.values(dossier.pastedSlots).filter(v => v !== null).length;
+    const pips = DOC_TYPES.map(t =>
+      `<div class="dossier-slot-pip${dossier.pastedSlots[t] ? ' filled' : ''}"></div>`
+    ).join('');
+    const readyStyle = filled >= 2 ? 'color:var(--ok)' : 'color:var(--dim)';
+
+    html += `
+      <div class="monitor-card${isActive ? ' active' : ''}" onclick="selectDossier('${id}')">
+        <div class="monitor-card-header">
+          <span class="monitor-card-id">${id}</span>
+          <span class="monitor-card-status" style="${readyStyle}">${filled >= 2 ? 'READY FOR VERDICT' : dossier.status.toUpperCase()}</span>
+        </div>
+        <div class="monitor-card-slots">${pips}</div>
+      </div>`;
+  });
+
+  html += `<div class="monitor-hint">
+    click dossier to select · click feed fragment to carry<br>
+    <b style="color:var(--muted)">TAB</b> switches screens
+  </div>`;
+
+  body.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  COPY-PASTE INTERACTION
 // ═══════════════════════════════════════════════════════════════════
 function pickupFragment(fragment) {
@@ -1257,6 +1340,7 @@ function pasteToSlot(slotType) {
 
   renderWorksheet();
   renderDossierList();
+  renderMonitorScreen();
   updateVerdictButtons();
   setStatus(`PASTED ${slotType.toUpperCase()} — SOURCE: ${frag.source}`);
 }
@@ -1372,6 +1456,7 @@ function dismissReveal() {
 
   drawNextDossier();
   renderDossierList();
+  renderMonitorScreen();
   switchCamera('monitoring');
 
   const rem = state.dossiers.size;

@@ -705,6 +705,12 @@ the main view region. Drag via plain `mousedown / mousemove / mouseup`
 handlers, no library. Closing one returns its summon button to the panel
 list. Maximum 3 summon panels open at a time (UX constraint, not technical).
 
+> **Superseded by milestone v1.1 (Section 8.1).** This fixed-grid + summonable
+> model describes shipped v1. v1.1 replaces it with a full window-desk console
+> (case windows + per-dossier source windows under one window manager); the
+> "max 3" cap is replaced by: case windows = `LEVELS` count, source windows = 4
+> for the focused dossier.
+
 **Mobile / touch is explicitly secondary.** This game is designed for
 desktop with mouse and keyboard. Touch support exists as a courtesy for
 the operator's friends with touchscreen laptops. Mobile phone playability
@@ -1505,8 +1511,12 @@ narrative messages, summon-panels (if pursued in v1).
 # SECTION 8.1 — Milestone v1.1: Operator Console
 
 > **Status:** planned 2026-06-22, after v1 (Phases 0–12) shipped and was
-> browser-verified. This milestone is a deliberate re-vision of the *feel*
-> of the core loop, not a rewrite of its mechanics.
+> browser-verified; design settled in a discuss pass the same day. This
+> milestone re-visions the core loop's *surface* — a full replacement of the
+> fixed feed/worksheet layout with a floating-window console — and deepens the
+> verdict into a composite judgement. The underlying intent (gather scattered
+> source data, match the right object under confusion, classify the threat) is
+> preserved and intensified.
 
 ## Why this milestone
 
@@ -1525,21 +1535,46 @@ This promotes two items previously deferred to v2 (see Section 9): the
 sources**. The draggable Reference Card summon-panel shipped in Phase 12 is the
 first building block of this paradigm.
 
-## Leading assumption (confirm before executing Phase 15+)
+## Settled design (discuss pass, 2026-06-22)
 
-The floating-windows surface is treated as an **evolution layered on top of**
-the existing telemetry feed + camera + worksheet, **not** a replacement of the
-feed. The feed remains the canonical Variant-a fragment stream; the worksheet's
-fixed slots evolve into draggable source/dossier windows. If the intent is
-instead to retire the feed/worksheet split entirely, Phases 15–16 need a
-different decomposition — settle this in a discuss pass first.
+The console is a **full replacement** of the v1 layout, not a layer on top.
+The fixed telemetry-feed column and the two-screen camera/worksheet are retired
+in favour of a desk of draggable windows:
+
+- **Case window** — one per active dossier, auto-spawned, draggable, and
+  **collapsible**. Holds the composite verdict (sub-items). Concurrent count
+  follows the existing `LEVELS` (L1 = 1, L2 = 3, L3 = 6 case windows).
+- **Source windows** — one per observatory (PAN-STARRS / ATLAS / CATALINA /
+  JPL-CNEOS), spawned **for the focused dossier** and swapped when focus moves
+  to another case window. Caps visible source windows at 4 regardless of level.
+  Each maps to one doc-type via the data's `source_attribution`
+  (orbital←PAN-STARRS, proximity←JPL-CNEOS, physical←CATALINA, probability←ATLAS).
+- **Verdict** is **composite**: the player drags the matched-object fragment
+  from each source window into the case window's sub-items, sets a sub-judgement
+  per item (nominal / elevated / critical), and the aggregate yields
+  SAFE / MONITOR / DANGEROUS. Scored on both correct sourcing (right object)
+  and correct sub-judgements.
+
+**Variant-a (wrong-object) error mechanic, preserved under per-dossier sources:**
+because a source window is scoped to its dossier, within-window interleaving no
+longer supplies the confusion. Two replacements carry it instead — (a) source
+windows still stream **decoy fragments** from nearby objects with similar
+values, so the player must match `object_id`; (b) at higher levels several
+partially-filled case windows share the desk and focus-switching invites
+cross-object mistakes. (Open: operator may opt for "clean" sources, shifting all
+load onto cross-dossier clutter.)
 
 ## Ordering
 
-Cheap atmosphere and motion first (13–14, low risk, no design ambiguity), then
-the paradigm work (15–16, design-heavy — discuss before executing), then the
-final consistency pass (17). One phase at a time; pause for review at each
-boundary, as in Section 8.
+Atmosphere first (13, layout-agnostic, low risk), then the structural pivot
+(15) and its motion polish (14) and depth (16), then the final consistency pass
+(17). One phase at a time; pause for review at each boundary, as in Section 8.
+
+> **Sequencing caveat:** Phase 15 retires the feed/worksheet that Phase 14 would
+> otherwise polish. Build Phase 14's motion primitives (carried-fragment ghost,
+> easing) to be **surface-agnostic** so they carry into the console — or run 15
+> before 14 to polish motion on the final surface. Operator's call at the 13→14
+> boundary.
 
 ---
 
@@ -1600,63 +1635,68 @@ ambient presence, without touching game logic.
 
 ## PHASE 15 — Floating workstation surface
 
-**Goal:** Replace the tidy fixed worksheet column with a draggable,
-overlapping **window surface** — the cluttered operator's desk.
+**Goal:** Retire the fixed feed column + two-screen camera/worksheet and stand
+up the **window-desk console**: case windows + per-dossier source windows, all
+draggable.
 
-**Inputs:** Phase 14 complete; **discuss pass done** confirming the leading
-assumption above.
+**Inputs:** Phase 14 complete. Implements the settled design above. This is the
+structural pivot — expect to remove/replace the camera + fixed-worksheet code.
 
 **Deliverables:**
-- A reusable window-manager generalising the Phase 12 summon-panel base:
-  create / focus (z-order) / drag / close, with the Section 7 cap (max ~3–5
-  open). Single source of truth in `state.summonPanels`.
-- The active dossier's source material rendered as **separate draggable
-  windows** (one per source/doc-type, or per the discuss outcome) instead of
-  fixed slots — the player arranges them on the desk.
-- Verdict controls remain reachable but the surface is intentionally dense.
-
-**Open design questions (resolve in discuss):**
-- One window per observatory, per doc-type, or per dossier?
-- Do windows spawn automatically on dossier-open, or are they summoned?
-- How does "fill ≥2 slots to verdict" map onto windows?
-- Snap-to-grid vs. free placement; do positions persist per dossier?
+- A reusable **window manager** generalising the Phase 12 summon-panel base:
+  open / focus (z-order raise) / drag / collapse / close, viewport-clamped.
+  Single source of truth in `state.windows` (supersedes `summonPanels`).
+- **Case windows:** auto-spawn one per active dossier (count from `LEVELS`),
+  collapsible, showing the dossier id, the verdict sub-items, and timer.
+- **Source windows:** focusing a case window spawns its 4 observatory windows
+  (swapped on focus change), each streaming that source's fragments for the
+  dossier (decoy fragments deferred to Phase 16).
+- Drag a fragment from a source window into a case-window sub-item (replaces the
+  feed→slot paste). Reuse Phase 14's carried-fragment ghost.
+- Reference Card (Phase 12) re-homed into the same window manager.
 
 **Exit criterion:**
-- A dossier can be worked entirely through floating windows: gather → arrange
-  → reconcile → verdict; windows drag/focus/close; cap enforced; clean console.
+- A full shift plays on the desk: case windows spawn, focus swaps source
+  windows, fragments drag source→sub-item, verdict issues, windows
+  drag/collapse/close, all clamped to viewport; clean console; no dead code from
+  the retired feed/camera path.
 
 **Do NOT:**
-- Build the misleading/conflicting-source logic yet (Phase 16).
+- Build decoy/conflicting-source logic or composite sub-judgement scoring yet
+  (Phase 16). A single SAFE/MONITOR/DANGEROUS may stand in temporarily.
 
 ---
 
-## PHASE 16 — Multi-source verdict & deliberate misdirection
+## PHASE 16 — Composite verdict & deliberate misdirection
 
-**Goal:** Deepen the Variant-a error mechanic: a verdict is composed of
-several sub-judgements, each sourced from a **non-parallel** window, and
-sources can conflict or mislead.
+**Goal:** Turn the assembled case into a **composite judgement** and restore the
+Variant-a difficulty via decoys and conflicts, now that sources are windowed.
 
-**Inputs:** Phase 15 complete.
+**Inputs:** Phase 15 complete (case + source windows, drag-to-sub-item working).
 
 **Deliverables:**
-- Verdict decomposed into named sub-items (e.g. proximity risk, size,
-  impact probability) each resolved from its own source window.
-- Conflicting reports: two sources disagree on a field; the player must pick
-  which to trust or flag the conflict (promotes the v2 "conflict resolution"
-  item).
-- Misdirection surfaces tuned to the level system (more conflicts / near-
-  duplicate values at higher levels), reusing the existing wrong-object
-  fragment scoring.
+- **Composite verdict:** each sub-item (proximity risk / size / impact
+  probability / orbital character) takes a player sub-judgement
+  (nominal / elevated / critical); the aggregate maps to SAFE / MONITOR /
+  DANGEROUS. Reveal panel breaks the result down per sub-item.
+- **Scoring** on two axes: sourcing correctness (was each sub-item filled from
+  the right object?) and judgement correctness (sub-rating vs. ground truth).
+  Wrong-object fills feed the existing `wrongFragments` penalty.
+- **Decoy fragments:** source windows interleave fragments from nearby objects
+  with near-duplicate values; the player must match `object_id`.
+- **Conflicting reports:** two sources disagree on a field; the player picks
+  which to trust or flags the conflict (promotes the v2 conflict-resolution
+  item). Decoy/conflict rates scale with `LEVELS`.
 
-**Open design questions (resolve in discuss):**
-- Is the final verdict still a single SAFE/MONITOR/DANGEROUS, or a composite
-  scored across sub-items?
-- How is a "correct reconciliation" defined and scored vs. the current model?
+**Open design questions (revisit if needed):**
+- Exact aggregation rule (worst-of sub-items? weighted? proximity dominant?).
+- Whether "flag conflict" is a first-class verdict action or a sub-item state.
 
 **Exit criterion:**
-- A full dossier requires consulting ≥2 non-parallel windows; at least one
-  level surfaces a genuine conflict the player must resolve; scoring reflects
-  reconciliation quality; clean console.
+- A dossier requires sourcing all sub-items from the right object across
+  windows, with at least one level surfacing genuine decoys/conflicts; the
+  composite aggregates correctly; reveal shows the per-sub-item breakdown;
+  scoring reflects both axes; clean console.
 
 **Do NOT:**
 - Add Level 4 / emergency-protocol interrupts (still v2).

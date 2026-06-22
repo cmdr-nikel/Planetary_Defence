@@ -1817,14 +1817,14 @@ function initSplash() {
   ring.id = 'splash-ring';
   el.appendChild(ring);
   const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-  const rx = Math.min(cx, 520), ry = Math.min(cy, 320);
+  const rad = Math.min(cx, cy) * 0.82;           // single radius → a true circle, not an oval
   for (let i = 0; i < 36; i++) {
     const a = (i / 36) * Math.PI * 2;
     const s = document.createElement('div');
     s.className = 'ring-star';
     s.textContent = i % 4 === 0 ? '+' : '·';
-    s.style.left = `${cx + rx * Math.cos(a)}px`;
-    s.style.top  = `${cy + ry * Math.sin(a)}px`;
+    s.style.left = `${cx + rad * Math.cos(a)}px`;
+    s.style.top  = `${cy + rad * Math.sin(a)}px`;
     s.style.animationDelay = `${(i * 0.13).toFixed(2)}s`;
     ring.appendChild(s);
   }

@@ -765,9 +765,7 @@
   <footer id="statusbar">
     <div id="status-msg">SYSTEM READY</div>
     <div style="display:flex;gap:6px;align-items:center">
-      <button class="btn" onclick="startShift(1)">[ L1 SHIFT ]</button>
-      <button class="btn" onclick="startShift(2)">[ L2 SHIFT ]</button>
-      <button class="btn" onclick="startShift(3)">[ L3 SHIFT ]</button>
+      <button class="btn" onclick="beginShift()">[ ▸ START SHIFT ]</button>
     </div>
     <div style="display:flex;gap:6px;align-items:center">
       <span>NASA NEO <span class="blink">_</span></span>
@@ -781,14 +779,9 @@
 // ═══════════════════════════════════════════════════════════════════
 //  CONFIG
 // ═══════════════════════════════════════════════════════════════════
-const LEVELS = {
-  1: { dossierCount: 1, feedInterval: 4000, approachWindow: 180000, redactedRate: 0,    syntheticRate: 0,   decoyRate: 0    },
-  2: { dossierCount: 3, feedInterval: 2000, approachWindow: 90000,  redactedRate: 0,    syntheticRate: 0.2, decoyRate: 0.3  },
-  3: { dossierCount: 6, feedInterval: 1200, approachWindow: 60000,  redactedRate: 0.15, syntheticRate: 0.4, decoyRate: 0.5  },
-};
-
+// Difficulty is no longer level-switched — it ramps by cases resolved
+// (see difficulty() in the console layer).
 const DOC_TYPES = ['orbital', 'proximity', 'physical', 'probability'];
-const FEED_CAP  = 120;
 
 // ═══════════════════════════════════════════════════════════════════
 //  STATE
@@ -1001,9 +994,9 @@ velocity — against the approach window. We are reviewing this shift.
     };
     case 'shift_summary': return {
       from: 'NEOCC COORDINATION',
-      subject: `Shift summary — Level ${ctx.level}`,
+      subject: `Shift summary — ${ctx.resolved} cases`,
       body:
-`End-of-shift performance, Level ${ctx.level}:
+`End-of-shift performance (${ctx.resolved} cases resolved):
 
   Correct verdicts ....... ${ctx.correct}
   Caution (suboptimal) ... ${ctx.caution}
@@ -1080,6 +1073,13 @@ async function loadPool() {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     state.pool = data.objects;
+    // Precompute each object's known correct verdict (the game knows the
+    // answer, STELLaRUM-style). Binary truth + a MONITOR grey zone from
+    // borderline confidence / synthetic borderline-SMOTE objects.
+    state.pool.forEach(o => {
+      const borderline = o.is_synthetic || (o.model_confidence >= 0.4 && o.model_confidence <= 0.6);
+      o.verdict = borderline ? 'monitor' : (o.true_class === 'hazardous' ? 'dangerous' : 'safe');
+    });
     document.getElementById('obj-count').textContent = state.pool.length;
     setStatus(`LOADED ${state.pool.length} OBJECTS — READY`, 'ok');
   } catch (err) {
@@ -1190,17 +1190,10 @@ function caseSlotHTML(dossierId, t, d) {
   const labels = { orbital:'Orbital Survey', proximity:'Proximity Analysis', physical:'Physical Char.', probability:'Probability Update' };
   const docnum = { orbital:1, proximity:2, physical:3, probability:4 };
   const pasted = d.pastedSlots[t];
-  const rating = d.ratings ? d.ratings[t] : null;
-  const pills = pasted
-    ? `<div class="rate-row" data-rate-for="${t}">` +
-      ['nominal','elevated','critical'].map(r =>
-        `<span class="rate-pill rate-${r}${rating === r ? ' on' : ''}" data-rate="${r}">${r[0].toUpperCase()}${r.slice(1,3)}</span>`).join('') +
-      `</div>`
-    : '';
   return `<div class="ws-slot${pasted?' has-data':''}" data-caseslot="${t}">` +
          `<div class="ws-slot-header"><span class="ws-slot-label">${labels[t]}</span>` +
          `<span class="ws-slot-tag">DOC ${docnum[t]} · ${docTypeLabel(t)}</span></div>` +
-         `<div class="ws-slot-body ${pasted?'ws-slot-filled':'ws-slot-empty'}">${slotBodyHTML(pasted)}</div>${pills}</div>`;
+         `<div class="ws-slot-body ${pasted?'ws-slot-filled':'ws-slot-empty'}">${slotBodyHTML(pasted)}</div></div>`;
 }
 function spawnCaseWindow(dossierId, idx) {
   const d = state.dossiers.get(dossierId);
@@ -1226,38 +1219,23 @@ function renderCaseBody(dossierId) {
     DOC_TYPES.map(t => caseSlotHTML(dossierId, t, d)).join('') +
     `<div class="ws-footer" id="cssc-${dossierId}" style="margin-top:6px"></div>` +
     `<div class="case-verdict-row">` +
-    `<button class="verdict-btn v-issue" data-issue disabled>[ ISSUE VERDICT ]</button></div>`;
+    `<button class="verdict-btn v-issue" data-issue disabled>[ SUBMIT CASE ]</button></div>`;
   DOC_TYPES.forEach(t => body.querySelector(`[data-caseslot="${t}"]`)
     .addEventListener('click', e => { e.stopPropagation(); pasteToCaseSlot(dossierId, t); }));
-  body.querySelectorAll('.rate-pill').forEach(p =>
-    p.addEventListener('click', e => {
-      e.stopPropagation();
-      const t = p.closest('[data-rate-for]').dataset.rateFor;
-      setRating(dossierId, t, p.dataset.rate);
-    }));
   body.querySelector('[data-issue]')
     .addEventListener('click', e => { e.stopPropagation(); submitVerdict(dossierId); });
   updateCaseVerdict(dossierId);
-}
-function setRating(dossierId, t, r) {
-  const d = state.dossiers.get(dossierId);
-  if (!d || !d.pastedSlots[t]) return;
-  d.ratings[t] = r;
-  renderCaseBody(dossierId);
 }
 function updateCaseVerdict(dossierId) {
   const rec = state.windows.get(`case-${dossierId}`);
   const d = state.dossiers.get(dossierId);
   if (!rec || !d) return;
   const filledTypes = DOC_TYPES.filter(t => d.pastedSlots[t]);
-  const ratedTypes  = filledTypes.filter(t => d.ratings[t]);
-  const ok = filledTypes.length >= 2 && ratedTypes.length === filledTypes.length;
+  const ok = filledTypes.length >= 2;
   const issue = rec.el.querySelector('[data-issue]');
   if (issue) issue.disabled = !ok;
   const sc = document.getElementById(`cssc-${dossierId}`);
-  if (sc) sc.textContent =
-    `${filledTypes.length}/4 sourced · ${ratedTypes.length}/${filledTypes.length} rated` +
-    (ok ? ' — ready' : (filledTypes.length < 2 ? ' — source ≥2' : ' — rate all'));
+  if (sc) sc.textContent = `${filledTypes.length}/4 sourced` + (ok ? ' — ready to submit' : ' — source ≥2');
 }
 
 // ── source windows ─────────────────────────────────────────────────
@@ -1272,28 +1250,9 @@ function spawnSourceWindows(dossierId) {
   DOC_TYPES.forEach((t, k) => {
     const el = makeWindow({ id:`src-${t}`, cls:'win-source', title:`${SRC_OF[t]} · ${docTypeLabel(t)}`,
                             x: Math.max(0, w - 268), y: 14 + k * 138 });
-    el.querySelector('.win-body').innerHTML = '<div class="src-empty">awaiting telemetry…</div>';
     state.windows.set(`src-${t}`, { type:'source', docType:t, dossierId, el });
   });
-}
-function appendSrcRow(docType, fragment) {
-  const rec = state.windows.get(`src-${docType}`);
-  if (!rec) return;
-  const body = rec.el.querySelector('.win-body');
-  const empty = body.querySelector('.src-empty');
-  if (empty) empty.remove();
-  const row = document.createElement('div');
-  row.className = 'src-row';
-  row.dataset.fragmentId = fragment.id;
-  row.innerHTML = `<div><span style="color:var(--dim);font-size:9px">[${fragment.ts}]</span> ` +
-                  `<span class="src-obj">${fragment.object_id}</span></div>` +
-                  `<div class="src-val">${fragment.fieldStr}</div>`;
-  row.addEventListener('click', e => { e.stopPropagation(); pickupFragment(fragment); });
-  body.appendChild(row);
-  state.fragmentMap.set(fragment.id, fragment);
-  // cap rows
-  while (body.querySelectorAll('.src-row').length > 24) body.querySelector('.src-row').remove();
-  body.scrollTop = body.scrollHeight;
+  rotateRosters();
 }
 
 // ── fragments ──────────────────────────────────────────────────────
@@ -1313,20 +1272,63 @@ function pickDecoys(obj) {
     .sort((a, b) => Math.abs(a.fields.proximity.moid - m) - Math.abs(b.fields.proximity.moid - m))
     .slice(0, 6);
 }
-function emitFragment() {
+const shuffle = a => a.slice().sort(() => Math.random() - 0.5);
+
+// Source windows show a BOUNDED roster — the focused object + N decoys — the
+// same set in every window but independently shuffled per window (non-parallel
+// sources). Reshuffled in place each tick, so the needed fragment is always
+// on screen and never scrolls away (operator's round-robin idea).
+function renderSourceRoster(docType, objs) {
+  const rec = state.windows.get(`src-${docType}`);
+  if (!rec) return;
+  const cfg = difficulty();
+  const body = rec.el.querySelector('.win-body');
+  body.innerHTML = '';
+  objs.forEach(obj => {
+    const redact = docType === 'proximity' && cfg.redactedRate && Math.random() < cfg.redactedRate;
+    const fragment = makeFragment(obj, docType, redact);
+    const row = document.createElement('div');
+    row.className = 'src-row';
+    row.dataset.fragmentId = fragment.id;
+    row.innerHTML = `<div><span style="color:var(--dim);font-size:9px">[${fragment.ts}]</span> ` +
+                    `<span class="src-obj">${fragment.object_id}</span></div>` +
+                    `<div class="src-val">${fragment.fieldStr}</div>`;
+    row.addEventListener('click', e => { e.stopPropagation(); pickupFragment(fragment); });
+    state.fragmentMap.set(fragment.id, fragment);
+    body.appendChild(row);
+  });
+}
+function rotateRosters() {
   const id = state.focusedDossierId;
   if (!id || !state.dossiers.has(id)) return;
+  if (state.carriedFragment) return;                 // don't reshuffle out from under a carry
   const d = state.dossiers.get(id);
-  const cfg = LEVELS[state.shift.level];
-  const t = DOC_TYPES[Math.floor(Math.random() * DOC_TYPES.length)];
-  const redact = t === 'proximity' && Math.random() < cfg.redactedRate;
-  // Decoy: occasionally stream a near-neighbour's fragment (wrong object_id) to
-  // restore the Variant-a confusion now that sources are per-dossier (Phase 16).
-  let obj = d.object;
-  if (cfg.decoyRate > 0 && d.decoys && d.decoys.length && Math.random() < cfg.decoyRate) {
-    obj = d.decoys[Math.floor(Math.random() * d.decoys.length)];
+  const n = difficulty().decoyCount;
+  const roster = [d.object, ...(d.decoys || []).slice(0, n)];
+  DOC_TYPES.forEach(t => renderSourceRoster(t, shuffle(roster)));  // independent order per window
+}
+
+// ── difficulty ramp (by cases resolved) ────────────────────────────
+function difficulty() {
+  const r = state.casesResolved || 0;
+  return {
+    targetCases:    Math.min(6, 1 + Math.floor(r / 3)),       // +1 concurrent case every 3 resolved
+    rotateInterval: Math.max(1400, 3200 - r * 140),           // reshuffle faster over time
+    decoyCount:     Math.min(5, Math.floor(r / 2)),           // 0 decoys at start, +1 per 2 resolved
+    approachWindow: Math.max(45000, 150000 - r * 6000),       // tighter windows over time
+    redactedRate:   r >= 6 ? 0.15 : 0,                        // occasional REDACTED MOID late on
+  };
+}
+function recordResolved() { state.casesResolved = (state.casesResolved || 0) + 1; }
+function applyDifficulty() {
+  if (state.feedTimer) clearInterval(state.feedTimer);
+  state.feedTimer = setInterval(rotateRosters, difficulty().rotateInterval);
+  fillToTarget();
+}
+function fillToTarget() {
+  while (state.shift.active && state.dossiers.size < difficulty().targetCases) {
+    if (!drawNextDossier()) break;
   }
-  appendSrcRow(t, makeFragment(obj, t, redact));
 }
 
 // ── carry / paste ──────────────────────────────────────────────────
@@ -1417,7 +1419,7 @@ function renderCaseIndex() {
 }
 
 // ── shift control ──────────────────────────────────────────────────
-function startShift(level) {
+function beginShift() {
   if (state.pool.length === 0) { setStatus('DATASET NOT LOADED', 'err'); return; }
 
   if (state.shift.active && state.shift.scoreSnapshot) {
@@ -1428,15 +1430,15 @@ function startShift(level) {
       wrongFragments: state.score.wrongFragments - s.wrongFragments,
     };
     if (delta.correct + delta.caution + delta.miss + delta.critical > 0)
-      deliverMail('shift_summary', { level: state.shift.level, ...delta }, { once: false });
+      deliverMail('shift_summary', { resolved: state.casesResolved || 0, ...delta }, { once: false });
   }
   deliverMail('welcome');
 
   if (state.feedTimer)     { clearInterval(state.feedTimer);     state.feedTimer = null; }
   if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval = null; }
 
-  const cfg = LEVELS[level];
-  state.shift.level = level; state.shift.active = true; state.shift.startedAt = Date.now();
+  state.shift.active = true; state.shift.startedAt = Date.now();
+  state.casesResolved = 0;
   state.dossiers.clear(); state.usedObjectIds.clear(); state.fragmentMap.clear();
   state.activeDossierId = null; state.focusedDossierId = null; state.carriedFragment = null;
 
@@ -1445,88 +1447,80 @@ function startShift(level) {
   document.getElementById('reveal-panel').classList.remove('show');
   document.getElementById('desk-idle').style.display = 'none';
 
-  const shuffled  = arr => arr.slice().sort(() => Math.random() - 0.5);
-  const hazardous = shuffled(state.pool.filter(o => !o.is_synthetic && o.true_class === 'hazardous'));
-  const safe      = shuffled(state.pool.filter(o => o.true_class === 'safe'));
-  const synthetic = shuffled(state.pool.filter(o => o.is_synthetic));
-  const remaining  = cfg.dossierCount - 1;
-  const nSynthetic = Math.round(remaining * cfg.syntheticRate);
-  const nSafe      = remaining - nSynthetic;
-  let picked = [hazardous[0]].concat(safe.slice(0, nSafe), synthetic.slice(0, nSynthetic));
-  picked = shuffled(picked).slice(0, cfg.dossierCount);
-
-  const now = Date.now();
-  picked.forEach((obj, idx) => {
-    state.dossiers.set(obj.object_id, {
-      object: obj, pastedSlots: { orbital:null, proximity:null, physical:null, probability:null },
-      ratings: { orbital:null, proximity:null, physical:null, probability:null },
-      decoys: pickDecoys(obj),
-      status: 'pending', wrongFragments: 0, timer: { startTime: now, duration: cfg.approachWindow },
-    });
-    spawnCaseWindow(obj.object_id, idx);
-  });
-
-  focusDossier(picked[0].object_id);
-  renderCaseIndex();
-
-  emitFragment();
-  state.feedTimer     = setInterval(emitFragment, cfg.feedInterval);
   state.timerInterval = setInterval(updateTimers, 500);
+  applyDifficulty();                                  // fills to the starting target + starts rotation
+  const first = [...state.dossiers.keys()][0];
+  if (first) focusDossier(first);
+  renderCaseIndex();
   state.shift.scoreSnapshot = { ...state.score };
-  setStatus(`LEVEL ${level} SHIFT ACTIVE — ${cfg.dossierCount} CASE${cfg.dossierCount > 1 ? 'S' : ''}`, 'ok');
+  setStatus('SHIFT ACTIVE — THE WATCH BEGINS', 'ok');
 }
 
 function drawNextDossier() {
-  if (!state.shift.active) return;
-  const cfg = LEVELS[state.shift.level];
-  if (state.dossiers.size >= cfg.dossierCount) return;
-  const available = state.pool.filter(o => !state.usedObjectIds.has(o.object_id) && !state.dossiers.has(o.object_id));
-  if (available.length === 0) { setStatus('ALL OBJECTS PROCESSED — SHIFT COMPLETE', 'ok'); return; }
-  const pick = available[Math.floor(Math.random() * available.length)];
+  if (!state.shift.active) return false;
+  const used = o => state.usedObjectIds.has(o.object_id) || state.dossiers.has(o.object_id);
+  // Weighted class mix so the shift isn't mostly-safe: ~30% dangerous, ~25%
+  // monitor (borderline/synthetic), rest safe. Falls back to anything unused.
+  const r = Math.random();
+  const cls = r < 0.30 ? 'dangerous' : r < 0.55 ? 'monitor' : 'safe';
+  let pool = state.pool.filter(o => o.verdict === cls && !used(o));
+  if (!pool.length) pool = state.pool.filter(o => !used(o));
+  if (!pool.length) { setStatus('ALL OBJECTS PROCESSED — SHIFT COMPLETE', 'ok'); return false; }
+  const pick = pool[Math.floor(Math.random() * pool.length)];
   state.dossiers.set(pick.object_id, {
     object: pick, pastedSlots: { orbital:null, proximity:null, physical:null, probability:null },
-    ratings: { orbital:null, proximity:null, physical:null, probability:null },
     decoys: pickDecoys(pick),
     status: 'pending', wrongFragments: 0,
-    timer: { startTime: Date.now(), duration: LEVELS[state.shift.level].approachWindow },
+    timer: { startTime: Date.now(), duration: difficulty().approachWindow },
   });
   spawnCaseWindow(pick.object_id, state.dossiers.size - 1);
   renderCaseIndex();
+  return true;
 }
 
 // ── verdict + reveal ───────────────────────────────────────────────
-function computeOutcome(verdict, trueClass) {
-  const tc = trueClass === 'hazardous' ? 'dangerous' : 'safe';
-  return {
-    safe:      { safe: 'correct',  dangerous: 'critical' },
-    monitor:   { safe: 'caution',  dangerous: 'miss'     },
-    dangerous: { safe: 'caution',  dangerous: 'correct'  },
-  }[verdict][tc];
+// Outcome of the program's issued verdict vs the TRUE verdict of the focused
+// object (both 3-class). The program decides; the player's job was to source
+// the right object's data so the program assesses the right object.
+function outcomeOf(issued, truth) {
+  if (issued === truth) return 'correct';
+  if (truth === 'dangerous') return issued === 'safe' ? 'critical' : 'miss';   // threat under-called
+  if (truth === 'monitor')   return issued === 'safe' ? 'miss' : 'caution';
+  return 'caution';                                                            // truth safe, over-called
 }
-// Composite verdict (Phase 16): aggregate the per-sub-item ratings worst-of
-// → SAFE / MONITOR / DANGEROUS. No separate verdict click.
-function aggregateVerdict(d) {
-  const rank = { nominal: 0, elevated: 1, critical: 2 };
-  const filledTypes = DOC_TYPES.filter(t => d.pastedSlots[t] && d.ratings[t]);
-  if (!filledTypes.length) return null;
-  const worst = Math.max(...filledTypes.map(t => rank[d.ratings[t]]));
-  return worst === 2 ? 'dangerous' : worst === 1 ? 'monitor' : 'safe';
+// The object the player actually assembled = the most-sourced object_id across
+// filled slots (proximity breaks ties — it is the key hazard field).
+function assembledObjectId(d) {
+  const counts = {};
+  for (const t of DOC_TYPES) {
+    const p = d.pastedSlots[t];
+    if (p) counts[p.object_id] = (counts[p.object_id] || 0) + (t === 'proximity' ? 1.5 : 1);
+  }
+  let best = null, bestN = -1;
+  for (const [id, n] of Object.entries(counts)) if (n > bestN) { best = id; bestN = n; }
+  return best;
 }
 function submitVerdict(dossierId) {
   const d = state.dossiers.get(dossierId);
   if (!d) return;
-  const filledTypes = DOC_TYPES.filter(t => d.pastedSlots[t]);
-  if (filledTypes.length < 2 || !filledTypes.every(t => d.ratings[t])) return;
-  const verdict = aggregateVerdict(d);
-  const outcome = computeOutcome(verdict, d.object.true_class);
+  if (DOC_TYPES.filter(t => d.pastedSlots[t]).length < 2) return;
+  const assembledId = assembledObjectId(d);
+  const assembled   = state.dossiers.get(dossierId).object.object_id === assembledId
+    ? d.object
+    : (state.pool.find(o => o.object_id === assembledId) || d.object);
+  const verdict = assembled.verdict;                 // program issues the assembled object's known answer
+  const truth   = d.object.verdict;                  // the focused case's true answer
+  const outcome = outcomeOf(verdict, truth);
   if (outcome === 'critical') state.score.critical++; else state.score[outcome]++;
   if (d.wrongFragments > 0) state.score.wrongFragments += d.wrongFragments;
   sfx.verdict(verdict);
   if (outcome === 'critical') { sfx.critical(); deliverMail('first_critical', { id: dossierId }); }
   else if (verdict === 'dangerous' && outcome === 'correct') { deliverMail('first_dangerous', { id: dossierId }); }
   d.issuedVerdict = verdict;
+  d.assembledId = assembledId;
   d.status = 'verdict';
   state.pendingRevealId = dossierId;
+  recordResolved();
   showReveal(d, verdict, outcome);
 }
 function showReveal(dossier, verdict, outcome, isTimeout = false) {
@@ -1538,9 +1532,11 @@ function showReveal(dossier, verdict, outcome, isTimeout = false) {
   document.getElementById('reveal-outcome-word').textContent = word;
   document.getElementById('reveal-outcome-word').className   = `reveal-outcome-word ${cls}`;
   document.getElementById('reveal-outcome-sub').textContent  = sub;
+  const vLbl = { safe:'SAFE', monitor:'MONITOR', dangerous:'DANGEROUS' };
+  const vCls = { safe:'ok', monitor:'warn', dangerous:'crit' };
   document.getElementById('rv-id').textContent = obj.object_id;
-  document.getElementById('rv-true').textContent  = obj.true_class === 'hazardous' ? 'HAZARDOUS' : 'SAFE';
-  document.getElementById('rv-true').className    = `reveal-val ${obj.true_class === 'hazardous' ? 'crit' : 'ok'}`;
+  document.getElementById('rv-true').textContent  = vLbl[obj.verdict];
+  document.getElementById('rv-true').className    = `reveal-val ${vCls[obj.verdict]}`;
   document.getElementById('rv-synth').textContent = obj.is_synthetic ? 'YES — borderline-SMOTE' : 'NO — real NEO';
   document.getElementById('rv-synth').className   = `reveal-val ${obj.is_synthetic ? 'warn' : ''}`;
   document.getElementById('rv-pred').textContent = obj.model_prediction === 'hazardous' ? 'HAZARDOUS' : 'SAFE';
@@ -1555,17 +1551,20 @@ function showReveal(dossier, verdict, outcome, isTimeout = false) {
   document.getElementById('rv-wrong-count').textContent = dossier.wrongFragments;
   document.getElementById('rv-wrong-block').className = `reveal-wrong-fragments${dossier.wrongFragments > 0 ? ' has-wrong' : ''}`;
 
-  // Sub-item breakdown (Phase 16): which sources were used, from which object, rated how
+  // Sub-item breakdown: which object each slot was sourced from (WRONG OBJECT
+  // flagged) — shows why the program's assessment was right or wrong.
   const block = document.getElementById('rv-subitems-block');
   const filledTypes = DOC_TYPES.filter(t => dossier.pastedSlots[t]);
   if (filledTypes.length) {
     block.style.display = '';
     document.getElementById('rv-subitems').innerHTML = filledTypes.map(t => {
       const p = dossier.pastedSlots[t];
-      const r = dossier.ratings[t] || '—';
-      const bad = p.wrongObject ? ' <span class="rv-sub-bad">(WRONG OBJECT)</span>' : '';
-      return `<div class="rv-sub"><span>${docTypeLabel(t)} · ${p.object_id}${bad}</span><span>${r.toUpperCase()}</span></div>`;
-    }).join('');
+      const bad = p.wrongObject ? '<span class="rv-sub-bad">WRONG OBJECT</span>' : '<span style="color:var(--ok)">ok</span>';
+      return `<div class="rv-sub"><span>${docTypeLabel(t)} · ${p.object_id}</span>${bad}</div>`;
+    }).join('') +
+    (dossier.assembledId && dossier.assembledId !== obj.object_id
+      ? `<div class="rv-sub" style="margin-top:4px"><span>ASSESSED OBJECT</span><span class="rv-sub-bad">${dossier.assembledId}</span></div>`
+      : '');
   } else {
     block.style.display = 'none';
   }
@@ -1586,7 +1585,7 @@ function dismissReveal() {
     if (state.focusedDossierId === id) { state.focusedDossierId = null; closeSourceWindows(); }
     state.pendingRevealId = null;
   }
-  drawNextDossier();
+  applyDifficulty();                 // ramp: refill to the (possibly higher) target, retune rotation
   const next = [...state.dossiers.keys()][0];
   if (next) focusDossier(next);
   else { closeSourceWindows(); document.getElementById('desk-idle').style.display = ''; }
@@ -1617,10 +1616,13 @@ function updateTimers() {
 function handleTimeout(id) {
   const d = state.dossiers.get(id);
   if (!d || d.status !== 'pending') return;
-  const outcome = computeOutcome('monitor', d.object.true_class);
+  // No verdict was issued: a lapsed dangerous case is a critical miss, anything
+  // else is a plain miss (the watch failed to resolve it in time).
+  const outcome = d.object.verdict === 'dangerous' ? 'critical' : 'miss';
   d.status = 'timeout';
   if (outcome === 'critical') state.score.critical++; else state.score[outcome]++;
-  if (d.object.true_class === 'hazardous') { sfx.critical(); deliverMail('first_critical', { id }); }
+  recordResolved();
+  if (d.object.verdict === 'dangerous') { sfx.critical(); deliverMail('first_critical', { id }); }
   else sfx.reject();
   if (id === state.focusedDossierId || state.dossiers.size === 1) {
     state.pendingRevealId = id;

@@ -233,6 +233,32 @@
   .case-index-item:hover { background: #0d0d0d; }
   .case-index-item.focused { border-left-color: var(--bright); background: #0a0a0a; }
 
+  /* ============ MOTION (Phase 14) ============ */
+  /* carried-fragment ghost following the cursor */
+  #carry-ghost {
+    position: fixed; z-index: 99998; pointer-events: none;
+    display: none; padding: 3px 8px;
+    background: #14140a; border: 1px solid var(--warn);
+    color: var(--text); font-size: 10px; letter-spacing: 1px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.6); transform: translate(10px, 10px);
+    white-space: nowrap;
+  }
+  #carry-ghost.show { display: block; }
+  @keyframes winIn   { from { opacity: 0; transform: translateY(-6px) scale(0.985); } to { opacity: 1; transform: none; } }
+  @keyframes srcIn   { from { opacity: 0; transform: translateX(8px); }              to { opacity: 1; transform: none; } }
+  @keyframes slotFlash { 0% { background: #16240f; } 100% { background: transparent; } }
+  @keyframes shakeX  { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-4px)} 40%,80%{transform:translateX(4px)} }
+  .win        { animation: winIn 0.22s cubic-bezier(0.4,0,0.2,1); }
+  .src-row    { animation: srcIn 0.18s ease-out; }
+  .ws-slot.flash .ws-slot-body { animation: slotFlash 0.5s ease-out; }
+  .ws-slot.reject { animation: shakeX 0.32s ease-in-out; border-color: var(--crit) !important; }
+  #reveal-panel.show { animation: winIn 0.3s cubic-bezier(0.4,0,0.2,1); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .win, .src-row, .ws-slot.flash .ws-slot-body, .ws-slot.reject, #reveal-panel.show { animation: none !important; }
+    .camera-container, .case-timer-fill, .case-timer-fill { transition: none !important; }
+  }
+
   /* ============ LAYOUT ============ */
   #app {
     display: grid;
@@ -712,6 +738,8 @@
     </div>
   </div>
 </div>
+
+<div id="carry-ghost" aria-hidden="true"></div>
 
 <div id="app">
 
@@ -1415,6 +1443,20 @@ function emitFragment() {
 }
 
 // ── carry / paste ──────────────────────────────────────────────────
+// ── carry ghost (Phase 14 motion) ──────────────────────────────────
+const ghostEl = document.getElementById('carry-ghost');
+function showGhost(text) { ghostEl.textContent = text; ghostEl.classList.add('show'); }
+function hideGhost()     { ghostEl.classList.remove('show'); }
+document.addEventListener('mousemove', e => {
+  if (!ghostEl.classList.contains('show')) return;
+  ghostEl.style.left = `${e.clientX}px`;
+  ghostEl.style.top  = `${e.clientY}px`;
+});
+function caseSlotEl(dossierId, slotType) {
+  const rec = state.windows.get(`case-${dossierId}`);
+  return rec ? rec.el.querySelector(`[data-caseslot="${slotType}"]`) : null;
+}
+
 function pickupFragment(fragment) {
   if (state.carriedFragment) {
     const prev = deskEl.querySelector(`.src-row[data-fragment-id="${state.carriedFragment.id}"]`);
@@ -1424,6 +1466,7 @@ function pickupFragment(fragment) {
   const row = deskEl.querySelector(`.src-row[data-fragment-id="${fragment.id}"]`);
   if (row) row.classList.add('carrying');
   sfx.pickup();
+  showGhost(`${fragment.object_id} · ${docTypeLabel(fragment.doc_type)}`);
   setStatus(`CARRYING: ${fragment.object_id} [${docTypeLabel(fragment.doc_type)}] — click the matching slot on a case window`, 'warn');
 }
 function cancelCarry() {
@@ -1431,6 +1474,7 @@ function cancelCarry() {
   const row = deskEl.querySelector(`.src-row[data-fragment-id="${state.carriedFragment.id}"]`);
   if (row) row.classList.remove('carrying');
   state.carriedFragment = null;
+  hideGhost();
   setStatus('CARRY CANCELLED');
 }
 function pasteToCaseSlot(dossierId, slotType) {
@@ -1440,8 +1484,11 @@ function pasteToCaseSlot(dossierId, slotType) {
   const frag = state.carriedFragment;
   if (frag.doc_type !== slotType) {
     sfx.reject();
+    const slot = caseSlotEl(dossierId, slotType);
+    if (slot) { slot.classList.remove('reject'); void slot.offsetWidth; slot.classList.add('reject');
+                setTimeout(() => slot.classList.remove('reject'), 360); }
     setStatus(`TYPE MISMATCH — [${docTypeLabel(frag.doc_type)}] cannot go in ${slotType.toUpperCase()}`, 'err');
-    return;
+    return;   // keep carrying so the player can retry
   }
   const wrongObject = frag.object_id !== dossierId;
   if (wrongObject) d.wrongFragments++;
@@ -1449,8 +1496,11 @@ function pasteToCaseSlot(dossierId, slotType) {
   const row = deskEl.querySelector(`.src-row[data-fragment-id="${frag.id}"]`);
   if (row) { row.classList.remove('carrying'); row.classList.add('consumed'); }
   state.carriedFragment = null;
+  hideGhost();
   sfx.paste();
   renderCaseBody(dossierId);
+  const slot = caseSlotEl(dossierId, slotType);   // flash the freshly-rendered slot
+  if (slot) slot.classList.add('flash');
   setStatus(`SOURCED ${slotType.toUpperCase()} — ${frag.source}`);
 }
 

@@ -1510,7 +1510,13 @@ narrative messages, summon-panels (if pursued in v1).
 
 # SECTION 8.1 — Milestone v1.1: Operator Console
 
-> **Status:** planned 2026-06-22, after v1 (Phases 0–12) shipped and was
+> **Status:** COMPLETE 2026-06-22 — Phases 13–17 all implemented and
+> browser-verified (commits 502ab0d, f190bbb, 17035c0, cad8f3a, 73e6ae7).
+> Open refinements left for later: explicit conflict-resolution-as-action,
+> per-sub-item ground-truth scoring, "clean sources" toggle, default-window
+> spread/layout polish.
+>
+> Planned 2026-06-22, after v1 (Phases 0–12) shipped and was
 > browser-verified; design settled in a discuss pass the same day. This
 > milestone re-visions the core loop's *surface* — a full replacement of the
 > fixed feed/worksheet layout with a floating-window console — and deepens the

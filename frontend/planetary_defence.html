@@ -203,6 +203,22 @@
   .case-timer-bar { flex: 1; height: 3px; background: var(--border); }
   .case-timer-fill { height: 100%; transition: width 0.5s linear, background 0.5s; background: var(--ok); }
   .case-verdict-row { display: flex; gap: 4px; margin-top: 7px; }
+  /* per-sub-item rating pills (Phase 16) */
+  .rate-row { display: flex; gap: 4px; padding: 4px 0 1px; }
+  .rate-pill {
+    flex: 1; text-align: center; cursor: pointer; font-size: 9px; letter-spacing: 1px;
+    padding: 2px 0; border: 1px solid var(--border-2); color: var(--dim);
+  }
+  .rate-pill:hover { color: var(--text); }
+  .rate-pill.rate-nominal.on  { border-color: var(--ok);   color: var(--ok);   background: #0a180d; }
+  .rate-pill.rate-elevated.on { border-color: var(--warn); color: var(--warn); background: #1a1400; }
+  .rate-pill.rate-critical.on { border-color: var(--crit); color: var(--crit); background: #1a0000; }
+  .verdict-btn.v-issue { flex: 1; border-color: var(--border-2); color: var(--muted); }
+  .verdict-btn.v-issue:not(:disabled):hover { border-color: var(--bright); color: var(--bright); background: #0d0d0d; }
+  .src-row.decoy-hint { } /* decoys are visually identical — confusion is intentional */
+  /* reveal sub-item breakdown */
+  .rv-sub { display: flex; justify-content: space-between; font-size: 10px; padding: 1px 0; }
+  .rv-sub .rv-sub-bad { color: var(--crit); }
 
   /* Source window */
   .win-source { width: 250px; }
@@ -786,6 +802,11 @@
           <div class="reveal-row"><span class="reveal-key">CONFIDENCE</span>   <span class="reveal-val" id="rv-conf">—</span></div>
         </div>
 
+        <div class="reveal-block" id="rv-subitems-block" style="display:none">
+          <div class="reveal-section-label">SUB-ITEM ASSESSMENT</div>
+          <div id="rv-subitems"></div>
+        </div>
+
         <div class="reveal-block">
           <div class="reveal-section-label">YOUR VERDICT</div>
           <div class="reveal-row"><span class="reveal-key">ISSUED</span>       <span class="reveal-val" id="rv-verdict">—</span></div>
@@ -930,9 +951,9 @@
 //  CONFIG
 // ═══════════════════════════════════════════════════════════════════
 const LEVELS = {
-  1: { dossierCount: 1, feedInterval: 4000, approachWindow: 180000, redactedRate: 0,   syntheticRate: 0   },
-  2: { dossierCount: 3, feedInterval: 2000, approachWindow: 90000,  redactedRate: 0,   syntheticRate: 0.2 },
-  3: { dossierCount: 6, feedInterval: 1200, approachWindow: 60000,  redactedRate: 0.15, syntheticRate: 0.4 },
+  1: { dossierCount: 1, feedInterval: 4000, approachWindow: 180000, redactedRate: 0,    syntheticRate: 0,   decoyRate: 0    },
+  2: { dossierCount: 3, feedInterval: 2000, approachWindow: 90000,  redactedRate: 0,    syntheticRate: 0.2, decoyRate: 0.3  },
+  3: { dossierCount: 6, feedInterval: 1200, approachWindow: 60000,  redactedRate: 0.15, syntheticRate: 0.4, decoyRate: 0.5  },
 };
 
 const DOC_TYPES = ['orbital', 'proximity', 'physical', 'probability'];
@@ -1338,10 +1359,17 @@ function caseSlotHTML(dossierId, t, d) {
   const labels = { orbital:'Orbital Survey', proximity:'Proximity Analysis', physical:'Physical Char.', probability:'Probability Update' };
   const docnum = { orbital:1, proximity:2, physical:3, probability:4 };
   const pasted = d.pastedSlots[t];
+  const rating = d.ratings ? d.ratings[t] : null;
+  const pills = pasted
+    ? `<div class="rate-row" data-rate-for="${t}">` +
+      ['nominal','elevated','critical'].map(r =>
+        `<span class="rate-pill rate-${r}${rating === r ? ' on' : ''}" data-rate="${r}">${r[0].toUpperCase()}${r.slice(1,3)}</span>`).join('') +
+      `</div>`
+    : '';
   return `<div class="ws-slot${pasted?' has-data':''}" data-caseslot="${t}">` +
          `<div class="ws-slot-header"><span class="ws-slot-label">${labels[t]}</span>` +
          `<span class="ws-slot-tag">DOC ${docnum[t]} · ${docTypeLabel(t)}</span></div>` +
-         `<div class="ws-slot-body ${pasted?'ws-slot-filled':'ws-slot-empty'}">${slotBodyHTML(pasted)}</div></div>`;
+         `<div class="ws-slot-body ${pasted?'ws-slot-filled':'ws-slot-empty'}">${slotBodyHTML(pasted)}</div>${pills}</div>`;
 }
 function spawnCaseWindow(dossierId, idx) {
   const d = state.dossiers.get(dossierId);
@@ -1367,24 +1395,38 @@ function renderCaseBody(dossierId) {
     DOC_TYPES.map(t => caseSlotHTML(dossierId, t, d)).join('') +
     `<div class="ws-footer" id="cssc-${dossierId}" style="margin-top:6px"></div>` +
     `<div class="case-verdict-row">` +
-    `<button class="verdict-btn v-safe" data-v="safe" disabled>[ SAFE ]</button>` +
-    `<button class="verdict-btn v-monitor" data-v="monitor" disabled>[ MONITOR ]</button>` +
-    `<button class="verdict-btn v-dangerous" data-v="dangerous" disabled>[ DANGEROUS ]</button></div>`;
+    `<button class="verdict-btn v-issue" data-issue disabled>[ ISSUE VERDICT ]</button></div>`;
   DOC_TYPES.forEach(t => body.querySelector(`[data-caseslot="${t}"]`)
     .addEventListener('click', e => { e.stopPropagation(); pasteToCaseSlot(dossierId, t); }));
-  body.querySelectorAll('.verdict-btn').forEach(b =>
-    b.addEventListener('click', e => { e.stopPropagation(); submitVerdict(dossierId, b.dataset.v); }));
+  body.querySelectorAll('.rate-pill').forEach(p =>
+    p.addEventListener('click', e => {
+      e.stopPropagation();
+      const t = p.closest('[data-rate-for]').dataset.rateFor;
+      setRating(dossierId, t, p.dataset.rate);
+    }));
+  body.querySelector('[data-issue]')
+    .addEventListener('click', e => { e.stopPropagation(); submitVerdict(dossierId); });
   updateCaseVerdict(dossierId);
+}
+function setRating(dossierId, t, r) {
+  const d = state.dossiers.get(dossierId);
+  if (!d || !d.pastedSlots[t]) return;
+  d.ratings[t] = r;
+  renderCaseBody(dossierId);
 }
 function updateCaseVerdict(dossierId) {
   const rec = state.windows.get(`case-${dossierId}`);
   const d = state.dossiers.get(dossierId);
   if (!rec || !d) return;
-  const filled = Object.values(d.pastedSlots).filter(Boolean).length;
-  const ok = filled >= 2;
-  rec.el.querySelectorAll('.verdict-btn').forEach(b => b.disabled = !ok);
+  const filledTypes = DOC_TYPES.filter(t => d.pastedSlots[t]);
+  const ratedTypes  = filledTypes.filter(t => d.ratings[t]);
+  const ok = filledTypes.length >= 2 && ratedTypes.length === filledTypes.length;
+  const issue = rec.el.querySelector('[data-issue]');
+  if (issue) issue.disabled = !ok;
   const sc = document.getElementById(`cssc-${dossierId}`);
-  if (sc) sc.textContent = `${filled} / 4 sourced${ok ? ' — ready' : ' — fill ≥2'}`;
+  if (sc) sc.textContent =
+    `${filledTypes.length}/4 sourced · ${ratedTypes.length}/${filledTypes.length} rated` +
+    (ok ? ' — ready' : (filledTypes.length < 2 ? ' — source ≥2' : ' — rate all'));
 }
 
 // ── source windows ─────────────────────────────────────────────────
@@ -1432,6 +1474,14 @@ function makeFragment(obj, docType, redact) {
     fieldStr: formatFields(docType, obj.fields, redact), isRedacted: !!redact,
   };
 }
+function pickDecoys(obj) {
+  // nearest objects by MOID — similar values, so the player must read object_id
+  const m = obj.fields.proximity.moid;
+  return state.pool
+    .filter(o => o.object_id !== obj.object_id)
+    .sort((a, b) => Math.abs(a.fields.proximity.moid - m) - Math.abs(b.fields.proximity.moid - m))
+    .slice(0, 6);
+}
 function emitFragment() {
   const id = state.focusedDossierId;
   if (!id || !state.dossiers.has(id)) return;
@@ -1439,7 +1489,13 @@ function emitFragment() {
   const cfg = LEVELS[state.shift.level];
   const t = DOC_TYPES[Math.floor(Math.random() * DOC_TYPES.length)];
   const redact = t === 'proximity' && Math.random() < cfg.redactedRate;
-  appendSrcRow(t, makeFragment(d.object, t, redact));
+  // Decoy: occasionally stream a near-neighbour's fragment (wrong object_id) to
+  // restore the Variant-a confusion now that sources are per-dossier (Phase 16).
+  let obj = d.object;
+  if (cfg.decoyRate > 0 && d.decoys && d.decoys.length && Math.random() < cfg.decoyRate) {
+    obj = d.decoys[Math.floor(Math.random() * d.decoys.length)];
+  }
+  appendSrcRow(t, makeFragment(obj, t, redact));
 }
 
 // ── carry / paste ──────────────────────────────────────────────────
@@ -1572,6 +1628,8 @@ function startShift(level) {
   picked.forEach((obj, idx) => {
     state.dossiers.set(obj.object_id, {
       object: obj, pastedSlots: { orbital:null, proximity:null, physical:null, probability:null },
+      ratings: { orbital:null, proximity:null, physical:null, probability:null },
+      decoys: pickDecoys(obj),
       status: 'pending', wrongFragments: 0, timer: { startTime: now, duration: cfg.approachWindow },
     });
     spawnCaseWindow(obj.object_id, idx);
@@ -1596,6 +1654,8 @@ function drawNextDossier() {
   const pick = available[Math.floor(Math.random() * available.length)];
   state.dossiers.set(pick.object_id, {
     object: pick, pastedSlots: { orbital:null, proximity:null, physical:null, probability:null },
+    ratings: { orbital:null, proximity:null, physical:null, probability:null },
+    decoys: pickDecoys(pick),
     status: 'pending', wrongFragments: 0,
     timer: { startTime: Date.now(), duration: LEVELS[state.shift.level].approachWindow },
   });
@@ -1612,16 +1672,28 @@ function computeOutcome(verdict, trueClass) {
     dangerous: { safe: 'caution',  dangerous: 'correct'  },
   }[verdict][tc];
 }
-function submitVerdict(dossierId, verdict) {
+// Composite verdict (Phase 16): aggregate the per-sub-item ratings worst-of
+// → SAFE / MONITOR / DANGEROUS. No separate verdict click.
+function aggregateVerdict(d) {
+  const rank = { nominal: 0, elevated: 1, critical: 2 };
+  const filledTypes = DOC_TYPES.filter(t => d.pastedSlots[t] && d.ratings[t]);
+  if (!filledTypes.length) return null;
+  const worst = Math.max(...filledTypes.map(t => rank[d.ratings[t]]));
+  return worst === 2 ? 'dangerous' : worst === 1 ? 'monitor' : 'safe';
+}
+function submitVerdict(dossierId) {
   const d = state.dossiers.get(dossierId);
   if (!d) return;
-  if (Object.values(d.pastedSlots).filter(Boolean).length < 2) return;
+  const filledTypes = DOC_TYPES.filter(t => d.pastedSlots[t]);
+  if (filledTypes.length < 2 || !filledTypes.every(t => d.ratings[t])) return;
+  const verdict = aggregateVerdict(d);
   const outcome = computeOutcome(verdict, d.object.true_class);
   if (outcome === 'critical') state.score.critical++; else state.score[outcome]++;
   if (d.wrongFragments > 0) state.score.wrongFragments += d.wrongFragments;
   sfx.verdict(verdict);
   if (outcome === 'critical') { sfx.critical(); deliverMail('first_critical', { id: dossierId }); }
   else if (verdict === 'dangerous' && outcome === 'correct') { deliverMail('first_dangerous', { id: dossierId }); }
+  d.issuedVerdict = verdict;
   d.status = 'verdict';
   state.pendingRevealId = dossierId;
   showReveal(d, verdict, outcome);
@@ -1651,6 +1723,22 @@ function showReveal(dossier, verdict, outcome, isTimeout = false) {
   document.getElementById('rv-outcome').className   = `reveal-val ${ {correct:'ok',caution:'warn',miss:'crit',critical:'crit'}[outcome] }`;
   document.getElementById('rv-wrong-count').textContent = dossier.wrongFragments;
   document.getElementById('rv-wrong-block').className = `reveal-wrong-fragments${dossier.wrongFragments > 0 ? ' has-wrong' : ''}`;
+
+  // Sub-item breakdown (Phase 16): which sources were used, from which object, rated how
+  const block = document.getElementById('rv-subitems-block');
+  const filledTypes = DOC_TYPES.filter(t => dossier.pastedSlots[t]);
+  if (filledTypes.length) {
+    block.style.display = '';
+    document.getElementById('rv-subitems').innerHTML = filledTypes.map(t => {
+      const p = dossier.pastedSlots[t];
+      const r = dossier.ratings[t] || '—';
+      const bad = p.wrongObject ? ' <span class="rv-sub-bad">(WRONG OBJECT)</span>' : '';
+      return `<div class="rv-sub"><span>${docTypeLabel(t)} · ${p.object_id}${bad}</span><span>${r.toUpperCase()}</span></div>`;
+    }).join('');
+  } else {
+    block.style.display = 'none';
+  }
+
   document.getElementById('reveal-panel').classList.add('show');
 }
 function closeCaseWindow(dossierId) {

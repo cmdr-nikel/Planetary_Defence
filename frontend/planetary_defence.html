@@ -170,10 +170,73 @@
   }
   .summon-btn:hover { color: var(--ok); border-color: var(--ok); }
 
+  /* ============ WINDOW DESK (Phase 15) ============ */
+  #desk { position: relative; overflow: hidden; flex: 1; min-height: 0; }
+  .win {
+    position: absolute; z-index: 100;
+    background: var(--surface);
+    border: 1px solid var(--border-2);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    display: flex; flex-direction: column;
+    min-width: 200px; max-width: 360px;
+  }
+  .win.focused { border-color: var(--muted); box-shadow: 0 10px 38px rgba(0,0,0,0.75); }
+  .win-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 7px; background: #0d0d0d;
+    border-bottom: 1px solid var(--border); cursor: move; user-select: none;
+    gap: 6px;
+  }
+  .win.focused .win-head { background: #121212; }
+  .win-title { font-size: 9px; letter-spacing: 2px; color: var(--bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .win-ctrls { display: flex; gap: 6px; flex-shrink: 0; }
+  .win-ctrl { cursor: pointer; color: var(--dim); font-size: 11px; line-height: 1; }
+  .win-ctrl:hover { color: var(--text); }
+  .win-ctrl.win-close:hover { color: var(--crit); }
+  .win-body { padding: 7px; overflow-y: auto; }
+  .win.collapsed .win-body { display: none; }
+
+  /* Case window */
+  .win-case { width: 320px; }
+  .win-case .win-title { color: var(--white); }
+  .case-timer-row { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; font-size: 9px; color: var(--dim); }
+  .case-timer-bar { flex: 1; height: 3px; background: var(--border); }
+  .case-timer-fill { height: 100%; transition: width 0.5s linear, background 0.5s; background: var(--ok); }
+  .case-verdict-row { display: flex; gap: 4px; margin-top: 7px; }
+
+  /* Source window */
+  .win-source { width: 250px; }
+  .win-source .win-body { padding: 0; max-height: 230px; }
+  .src-row {
+    padding: 5px 7px; border-bottom: 1px solid var(--border);
+    cursor: pointer; font-size: 10px; line-height: 1.5;
+    transition: background 0.08s;
+  }
+  .src-row:hover { background: #0d0d0d; }
+  .src-row.carrying { background: #14140a; outline: 1px solid var(--warn); }
+  .src-row.consumed { opacity: 0.3; pointer-events: none; }
+  .src-row .src-obj { color: var(--bright); }
+  .src-row .src-val { color: var(--text); }
+  .src-empty { padding: 10px 8px; color: var(--dim); font-size: 9px; }
+
+  /* Desk idle / cases index */
+  .desk-idle {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 6px;
+    color: var(--dim); font-size: 11px; letter-spacing: 2px; text-align: center;
+    pointer-events: none;
+  }
+  .case-index-item {
+    padding: 6px 9px; border-bottom: 1px solid var(--border); cursor: pointer;
+    border-left: 2px solid transparent; font-size: 11px;
+  }
+  .case-index-item:hover { background: #0d0d0d; }
+  .case-index-item.focused { border-left-color: var(--bright); background: #0a0a0a; }
+
   /* ============ LAYOUT ============ */
   #app {
     display: grid;
-    grid-template-columns: 240px 1fr 260px;
+    grid-template-columns: 1fr 260px;   /* desk | right panel (Phase 15: feed column retired) */
     grid-template-rows: 36px 1fr 28px;
     width: 100vw; height: 100vh; height: 100dvh;
     padding-top: env(safe-area-inset-top);
@@ -666,167 +729,50 @@
     </div>
   </header>
 
-  <!-- ══ LEFT — TELEMETRY FEED ══ -->
-  <aside id="left-panel" class="panel">
-    <div class="panel-title">◈ TELEMETRY FEED</div>
-    <div id="feed-scroll">
-      <div class="feed-placeholder">
-        [ NO ACTIVE SESSION ]<br>
-        start a shift to receive<br>
-        observatory fragments
-      </div>
-    </div>
-  </aside>
-
-  <!-- ══ CENTRE — MAIN VIEW (camera system) ══ -->
+  <!-- ══ CENTRE — WINDOW DESK (operator console) ══ -->
   <main id="main-view">
-    <div class="camera-container" id="camera" data-screen="monitoring">
-
-      <!-- SCREEN 1 — MONITORING -->
-      <div id="screen-monitoring">
-        <div class="screen-header">
-          <span><span class="screen-label">◈ SCREEN 1 —</span> MONITORING</span>
-          <button class="btn" onclick="switchCamera('worksheet')">WORKSHEET ›</button>
-        </div>
-        <div class="monitor-body" id="monitor-body">
-          <!-- populated by renderMonitorScreen() -->
-          <div class="monitor-idle">
-            <div class="monitor-art">⊙<br>◉ ● ●</div>
-            <div>NO ACTIVE SESSION</div>
-            <div style="color:var(--dim);font-size:10px;margin-top:4px">start a shift to begin</div>
-          </div>
-        </div>
+    <div id="desk">
+      <div class="desk-idle" id="desk-idle">
+        <div style="font-size:26px;color:var(--border-2)">⊙</div>
+        <div>NO ACTIVE SESSION</div>
+        <div style="color:var(--dim);font-size:10px">start a shift to open case windows</div>
       </div>
 
-      <!-- SCREEN 2 — WORKSHEET -->
-      <div id="screen-worksheet">
-        <div class="screen-header">
-          <span><span class="screen-label">◈ SCREEN 2 —</span> WORKSHEET</span>
-          <button class="btn" onclick="switchCamera('monitoring')">‹ MONITORING</button>
+      <!-- POST-VERDICT REVEAL (modal over desk) -->
+      <div id="reveal-panel">
+        <div class="reveal-outcome-row">
+          <div class="reveal-outcome-word" id="reveal-outcome-word">—</div>
+          <div style="font-size:10px;color:var(--dim);letter-spacing:2px" id="reveal-outcome-sub">—</div>
         </div>
 
-        <!-- shown when no dossier is active -->
-        <div class="ws-no-dossier" id="ws-no-dossier">
-          <div style="color:var(--border-2);font-size:10px;letter-spacing:2px">NO ACTIVE DOSSIER</div>
-          <div>return to monitoring and select a dossier</div>
-          <div style="font-size:10px;color:var(--dim);margin-top:4px">
-            press <b style="color:var(--muted)">TAB</b> or click <b style="color:var(--muted)">‹ MONITORING</b>
-          </div>
+        <div class="reveal-block">
+          <div class="reveal-section-label">OBJECT</div>
+          <div class="reveal-row"><span class="reveal-key">ID</span>            <span class="reveal-val" id="rv-id">—</span></div>
+          <div class="reveal-row"><span class="reveal-key">TRUE CLASS</span>    <span class="reveal-val" id="rv-true">—</span></div>
+          <div class="reveal-row"><span class="reveal-key">SYNTHETIC</span>     <span class="reveal-val" id="rv-synth">—</span></div>
         </div>
 
-        <!-- shown when a dossier is active -->
-        <div id="ws-dossier-content" style="display:none; flex-direction:column; height:100%; overflow:hidden;">
-          <div class="worksheet-header">
-            <div style="display:flex;justify-content:space-between;align-items:baseline">
-              <div>
-                <div class="ws-dossier-label">ACTIVE DOSSIER</div>
-                <div class="ws-dossier-id" id="ws-dossier-id">—</div>
-                <button class="summon-btn" style="margin-top:4px" onclick="summonRefCard()">⊞ REF CARD</button>
-              </div>
-              <div style="text-align:right">
-                <div class="ws-dossier-label">APPROACH WINDOW</div>
-                <div class="ws-timer-text" id="ws-timer-text" style="color:var(--dim)">—</div>
-              </div>
-            </div>
-            <div class="ws-timer-row">
-              <div class="ws-timer-bar"><div class="ws-timer-fill" id="ws-timer-fill" style="width:100%"></div></div>
-            </div>
-          </div>
+        <div class="reveal-block">
+          <div class="reveal-section-label">MODEL</div>
+          <div class="reveal-row"><span class="reveal-key">PREDICTION</span>   <span class="reveal-val" id="rv-pred">—</span></div>
+          <div class="reveal-row"><span class="reveal-key">CONFIDENCE</span>   <span class="reveal-val" id="rv-conf">—</span></div>
+        </div>
 
-          <div class="ws-slots">
-            <div class="ws-slot" id="slot-orbital" data-slot="orbital" onclick="pasteToSlot('orbital')">
-              <div class="ws-slot-header">
-                <span class="ws-slot-label">Orbital Survey Report</span>
-                <span class="ws-slot-tag">DOC 1 · ORB</span>
-              </div>
-              <div class="ws-slot-body ws-slot-empty" id="slot-orbital-body">
-                <span class="ws-slot-empty-bar">░░░</span>
-                <span>awaiting fragment from telemetry feed</span>
-              </div>
-            </div>
+        <div class="reveal-block">
+          <div class="reveal-section-label">YOUR VERDICT</div>
+          <div class="reveal-row"><span class="reveal-key">ISSUED</span>       <span class="reveal-val" id="rv-verdict">—</span></div>
+          <div class="reveal-row"><span class="reveal-key">OUTCOME</span>      <span class="reveal-val" id="rv-outcome">—</span></div>
+        </div>
 
-            <div class="ws-slot" id="slot-proximity" data-slot="proximity" onclick="pasteToSlot('proximity')">
-              <div class="ws-slot-header">
-                <span class="ws-slot-label">Proximity Analysis</span>
-                <span class="ws-slot-tag">DOC 2 · PRX</span>
-              </div>
-              <div class="ws-slot-body ws-slot-empty" id="slot-proximity-body">
-                <span class="ws-slot-empty-bar">░░░</span>
-                <span>awaiting fragment from telemetry feed</span>
-              </div>
-            </div>
+        <div class="reveal-wrong-fragments" id="rv-wrong-block">
+          wrong-object fragments pasted: <span id="rv-wrong-count">0</span>
+        </div>
 
-            <div class="ws-slot" id="slot-physical" data-slot="physical" onclick="pasteToSlot('physical')">
-              <div class="ws-slot-header">
-                <span class="ws-slot-label">Physical Characterisation</span>
-                <span class="ws-slot-tag">DOC 3 · PHY</span>
-              </div>
-              <div class="ws-slot-body ws-slot-empty" id="slot-physical-body">
-                <span class="ws-slot-empty-bar">░░░</span>
-                <span>awaiting fragment from telemetry feed</span>
-              </div>
-            </div>
-
-            <div class="ws-slot" id="slot-probability" data-slot="probability" onclick="pasteToSlot('probability')">
-              <div class="ws-slot-header">
-                <span class="ws-slot-label">Probability Update</span>
-                <span class="ws-slot-tag">DOC 4 · PRB</span>
-              </div>
-              <div class="ws-slot-body ws-slot-empty" id="slot-probability-body">
-                <span class="ws-slot-empty-bar">░░░</span>
-                <span>awaiting fragment from telemetry feed</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="ws-footer">
-            <span id="ws-slots-count">0 / 4 slots filled — fill ≥2 to issue verdict</span>
-          </div>
-
-          <div class="verdict-row">
-            <button class="verdict-btn v-safe"      id="vbtn-safe"      disabled onclick="submitVerdict('safe')"     >[ SAFE ]</button>
-            <button class="verdict-btn v-monitor"   id="vbtn-monitor"   disabled onclick="submitVerdict('monitor')"  >[ MONITOR ]</button>
-            <button class="verdict-btn v-dangerous" id="vbtn-dangerous" disabled onclick="submitVerdict('dangerous')" >[ DANGEROUS ]</button>
-          </div>
-        </div><!-- /ws-dossier-content -->
-
-        <!-- POST-VERDICT REVEAL PANEL -->
-        <div id="reveal-panel">
-          <div class="reveal-outcome-row">
-            <div class="reveal-outcome-word" id="reveal-outcome-word">—</div>
-            <div style="font-size:10px;color:var(--dim);letter-spacing:2px" id="reveal-outcome-sub">—</div>
-          </div>
-
-          <div class="reveal-block">
-            <div class="reveal-section-label">OBJECT</div>
-            <div class="reveal-row"><span class="reveal-key">ID</span>            <span class="reveal-val" id="rv-id">—</span></div>
-            <div class="reveal-row"><span class="reveal-key">TRUE CLASS</span>    <span class="reveal-val" id="rv-true">—</span></div>
-            <div class="reveal-row"><span class="reveal-key">SYNTHETIC</span>     <span class="reveal-val" id="rv-synth">—</span></div>
-          </div>
-
-          <div class="reveal-block">
-            <div class="reveal-section-label">MODEL</div>
-            <div class="reveal-row"><span class="reveal-key">PREDICTION</span>   <span class="reveal-val" id="rv-pred">—</span></div>
-            <div class="reveal-row"><span class="reveal-key">CONFIDENCE</span>   <span class="reveal-val" id="rv-conf">—</span></div>
-          </div>
-
-          <div class="reveal-block">
-            <div class="reveal-section-label">YOUR VERDICT</div>
-            <div class="reveal-row"><span class="reveal-key">ISSUED</span>       <span class="reveal-val" id="rv-verdict">—</span></div>
-            <div class="reveal-row"><span class="reveal-key">OUTCOME</span>      <span class="reveal-val" id="rv-outcome">—</span></div>
-          </div>
-
-          <div class="reveal-wrong-fragments" id="rv-wrong-block">
-            wrong-object fragments pasted: <span id="rv-wrong-count">0</span>
-          </div>
-
-          <div class="reveal-footer">
-            <button class="btn" style="flex:1;padding:8px" onclick="dismissReveal()">[ NEXT DOSSIER ]</button>
-          </div>
-        </div><!-- /reveal-panel -->
-      </div><!-- /screen-worksheet -->
-
-    </div><!-- /camera-container -->
+        <div class="reveal-footer">
+          <button class="btn" style="flex:1;padding:8px" onclick="dismissReveal()">[ NEXT DOSSIER ]</button>
+        </div>
+      </div><!-- /reveal-panel -->
+    </div><!-- /desk -->
   </main>
 
   <!-- ══ RIGHT — PANEL WITH TABS ══ -->
@@ -1290,505 +1236,324 @@ function srcPad(src) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  TELEMETRY FEED RENDERING
+//  WINDOW DESK — console interaction layer (Phase 15)
 // ═══════════════════════════════════════════════════════════════════
-const feedEl   = document.getElementById('feed-scroll');
-let feedRows   = [];
+const SRC_OF = { orbital:'PAN-STARRS', proximity:'JPL-CNEOS', physical:'CATALINA', probability:'ATLAS' };
+
+state.windows         = new Map();   // winId -> { type, dossierId, docType, el }
+state.focusedDossierId = null;
+let   winZ        = 100;
+let   fragmentCounter = 0;
+
+const deskEl = document.getElementById('desk');
 
 function feedTimestamp() {
   const n = new Date();
   return `${String(n.getUTCHours()).padStart(2,'0')}:${String(n.getUTCMinutes()).padStart(2,'0')}:${String(n.getUTCSeconds()).padStart(2,'0')}`;
 }
 
-function appendFeedRow(fragment) {
-  // Remove placeholder if present
-  const ph = feedEl.querySelector('.feed-placeholder');
-  if (ph) ph.remove();
-
-  const { ts, source, object_id, doc_type, fieldStr } = fragment;
-
-  const row = document.createElement('div');
-  row.className = 'feed-row';
-  row.dataset.fragmentId = fragment.id;
-  row.innerHTML =
-    `<div class="feed-row-line1">` +
-      `<span class="feed-ts">[${ts}]</span>` +
-      `<span class="feed-dim"> · </span>` +
-      `<span class="feed-src">${source}</span>` +
-      `<span class="feed-dim"> · </span>` +
-      `<span class="feed-objid">${object_id}</span>` +
-      `<span class="feed-dim"> [${docTypeLabel(doc_type)}]</span>` +
-    `</div>` +
-    `<div class="feed-row-line2">${fieldStr}</div>`;
-  row.onclick = () => pickupFragment(fragment);
-
-  state.fragmentMap.set(fragment.id, fragment);
-  feedEl.appendChild(row);
-  feedRows.push(row);
-
-  // Enforce cap: remove oldest rows beyond FEED_CAP
-  while (feedRows.length > FEED_CAP) {
-    const old = feedRows.shift();
-    old.remove();
-  }
-
-  if (state.feedAutoScroll) {
-    feedEl.scrollTop = feedEl.scrollHeight;
-  }
-
-  sfx.fragment();
+// ── window manager ─────────────────────────────────────────────────
+function makeWindow({ id, cls, title, x, y }) {
+  const el = document.createElement('div');
+  el.className = `win ${cls}`;
+  el.style.left = `${x}px`;
+  el.style.top  = `${y}px`;
+  el.dataset.winId = id;
+  el.innerHTML =
+    `<div class="win-head"><span class="win-title">${title}</span>` +
+    `<span class="win-ctrls"><span class="win-ctrl win-collapse" title="collapse">▁</span></span></div>` +
+    `<div class="win-body"></div>`;
+  deskEl.appendChild(el);
+  el.addEventListener('mousedown', () => focusWindow(el));
+  el.querySelector('.win-collapse').addEventListener('click', e => {
+    e.stopPropagation(); el.classList.toggle('collapsed');
+  });
+  dragify(el, el.querySelector('.win-head'));
+  focusWindow(el);
+  return el;
 }
-
-// Pause auto-scroll when user scrolls up manually
-feedEl.addEventListener('scroll', () => {
-  const atBottom = feedEl.scrollTop + feedEl.clientHeight >= feedEl.scrollHeight - 20;
-  state.feedAutoScroll = atBottom;
-});
-
-// ═══════════════════════════════════════════════════════════════════
-//  DOSSIER LIST RENDERING
-// ═══════════════════════════════════════════════════════════════════
-function renderDossierList() {
-  const view = document.getElementById('dossiers-view');
-  view.innerHTML = '';
-
-  if (state.dossiers.size === 0) {
-    view.innerHTML = '<div class="dossiers-placeholder">[ NO ACTIVE DOSSIERS ]</div>';
-    return;
-  }
-
-  state.dossiers.forEach((dossier, id) => {
-    const item = document.createElement('div');
-    item.className = 'dossier-item' + (state.activeDossierId === id ? ' active' : '');
-    item.onclick = () => selectDossier(id);
-
-    const filledCount = Object.values(dossier.pastedSlots).filter(v => v !== null).length;
-
-    let pips = '';
-    for (let i = 0; i < 4; i++) {
-      const filled = i < filledCount ? ' filled' : '';
-      pips += `<div class="dossier-slot-pip${filled}"></div>`;
-    }
-
-    const timerHtml = dossier.timer ? (() => {
-      const rem = timerRemaining(dossier);
-      const frac = rem / dossier.timer.duration;
-      const col  = timerColor(frac);
-      return `<div class="timer-wrap">` +
-        `<div class="timer-bar"><div class="timer-fill" id="timer-fill-${id}" style="width:${(frac*100).toFixed(1)}%;background:${col}"></div></div>` +
-        `<span class="timer-text" id="timer-text-${id}" style="color:${col}">${timerText(rem)}</span>` +
-        `</div>`;
-    })() : '';
-
-    item.innerHTML =
-      `<div class="dossier-id">${id}</div>` +
-      `<div class="dossier-meta">${dossier.status.toUpperCase()} · ${filledCount}/4 slots</div>` +
-      `<div class="dossier-slots">${pips}</div>` +
-      timerHtml;
-
-    view.appendChild(item);
+function focusWindow(el) {
+  el.style.zIndex = ++winZ;
+  deskEl.querySelectorAll('.win.focused').forEach(w => w.classList.remove('focused'));
+  el.classList.add('focused');
+}
+function dragify(panel, handle) {
+  let dragging = false, offX = 0, offY = 0;
+  handle.addEventListener('mousedown', e => {
+    dragging = true;
+    const r = panel.getBoundingClientRect(), dr = deskEl.getBoundingClientRect();
+    offX = e.clientX - r.left; offY = e.clientY - r.top;
+    e.preventDefault();
+    const move = ev => {
+      if (!dragging) return;
+      const dr2 = deskEl.getBoundingClientRect();
+      const x = Math.max(0, Math.min(deskEl.clientWidth  - panel.offsetWidth,  ev.clientX - dr2.left - offX));
+      const y = Math.max(0, Math.min(deskEl.clientHeight - panel.offsetHeight, ev.clientY - dr2.top  - offY));
+      panel.style.left = `${x}px`; panel.style.top = `${y}px`;
+    };
+    const up = () => { dragging = false; document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
   });
 }
 
-function selectDossier(id) {
-  state.activeDossierId = id;
-  renderDossierList();
-  renderMonitorScreen();
-  if (state.cameraScreen === 'worksheet') renderWorksheet();
-  updateVerdictButtons();
-  setStatus(`ACTIVE DOSSIER: ${id}`);
-
-  // Immediately sync worksheet timer to the newly selected dossier
-  const dossier = state.dossiers.get(id);
-  if (dossier && dossier.status === 'pending') {
-    const rem  = timerRemaining(dossier);
-    const frac = rem / dossier.timer.duration;
-    const col  = timerColor(frac);
-    const wsFill = document.getElementById('ws-timer-fill');
-    const wsText = document.getElementById('ws-timer-text');
-    if (wsFill) { wsFill.style.width = `${(frac * 100).toFixed(1)}%`; wsFill.style.background = col; }
-    if (wsText) { wsText.textContent = timerText(rem); wsText.style.color = col; }
+// ── case windows ───────────────────────────────────────────────────
+function slotBodyHTML(pasted) {
+  if (pasted) {
+    const warn = pasted.wrongObject ? ' style="color:var(--crit)"' : '';
+    return `<span style="color:var(--dim);margin-right:6px;font-size:10px">[${pasted.source}·${pasted.object_id}]</span>` +
+           `<span class="ws-slot-val"${warn}>${pasted.fieldStr}</span>`;
   }
+  return `<span class="ws-slot-empty-bar">░░░</span><span>awaiting source fragment</span>`;
+}
+function caseSlotHTML(dossierId, t, d) {
+  const labels = { orbital:'Orbital Survey', proximity:'Proximity Analysis', physical:'Physical Char.', probability:'Probability Update' };
+  const docnum = { orbital:1, proximity:2, physical:3, probability:4 };
+  const pasted = d.pastedSlots[t];
+  return `<div class="ws-slot${pasted?' has-data':''}" data-caseslot="${t}">` +
+         `<div class="ws-slot-header"><span class="ws-slot-label">${labels[t]}</span>` +
+         `<span class="ws-slot-tag">DOC ${docnum[t]} · ${docTypeLabel(t)}</span></div>` +
+         `<div class="ws-slot-body ${pasted?'ws-slot-filled':'ws-slot-empty'}">${slotBodyHTML(pasted)}</div></div>`;
+}
+function spawnCaseWindow(dossierId, idx) {
+  const d = state.dossiers.get(dossierId);
+  const el = makeWindow({ id:`case-${dossierId}`, cls:'win win-case'.replace('win ',''), title:`CASE · ${dossierId}`,
+                          x: 24 + idx * 38, y: 18 + idx * 34 });
+  el.classList.add('win-case');
+  el.dataset.caseFor = dossierId;
+  el.addEventListener('mousedown', () => focusDossier(dossierId));
+  state.windows.set(`case-${dossierId}`, { type:'case', dossierId, el });
+  renderCaseBody(dossierId);
+  return el;
+}
+function renderCaseBody(dossierId) {
+  const rec = state.windows.get(`case-${dossierId}`);
+  if (!rec) return;
+  const d = state.dossiers.get(dossierId);
+  if (!d) return;
+  const body = rec.el.querySelector('.win-body');
+  body.innerHTML =
+    `<div class="case-timer-row"><span>APPROACH</span>` +
+    `<div class="case-timer-bar"><div class="case-timer-fill" id="ctf-${dossierId}" style="width:100%"></div></div>` +
+    `<span id="ctt-${dossierId}">—</span></div>` +
+    DOC_TYPES.map(t => caseSlotHTML(dossierId, t, d)).join('') +
+    `<div class="ws-footer" id="cssc-${dossierId}" style="margin-top:6px"></div>` +
+    `<div class="case-verdict-row">` +
+    `<button class="verdict-btn v-safe" data-v="safe" disabled>[ SAFE ]</button>` +
+    `<button class="verdict-btn v-monitor" data-v="monitor" disabled>[ MONITOR ]</button>` +
+    `<button class="verdict-btn v-dangerous" data-v="dangerous" disabled>[ DANGEROUS ]</button></div>`;
+  DOC_TYPES.forEach(t => body.querySelector(`[data-caseslot="${t}"]`)
+    .addEventListener('click', e => { e.stopPropagation(); pasteToCaseSlot(dossierId, t); }));
+  body.querySelectorAll('.verdict-btn').forEach(b =>
+    b.addEventListener('click', e => { e.stopPropagation(); submitVerdict(dossierId, b.dataset.v); }));
+  updateCaseVerdict(dossierId);
+}
+function updateCaseVerdict(dossierId) {
+  const rec = state.windows.get(`case-${dossierId}`);
+  const d = state.dossiers.get(dossierId);
+  if (!rec || !d) return;
+  const filled = Object.values(d.pastedSlots).filter(Boolean).length;
+  const ok = filled >= 2;
+  rec.el.querySelectorAll('.verdict-btn').forEach(b => b.disabled = !ok);
+  const sc = document.getElementById(`cssc-${dossierId}`);
+  if (sc) sc.textContent = `${filled} / 4 sourced${ok ? ' — ready' : ' — fill ≥2'}`;
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  FRAGMENT EMISSION
-// ═══════════════════════════════════════════════════════════════════
-let fragmentCounter = 0;
-
-function emitFragment() {
-  if (state.dossiers.size === 0) return;
-
-  // Pick a random active dossier (prefer ones with un-emitted doc types)
-  const ids = [...state.dossiers.keys()];
-  // Shuffle for variety, then prefer those with remaining types
-  ids.sort(() => Math.random() - 0.5);
-
-  let chosen = null;
-  let chosenType = null;
-
-  // First pass: prefer dossiers with types not yet emitted this cycle
-  for (const id of ids) {
-    const d = state.dossiers.get(id);
-    const remaining = DOC_TYPES.filter(t => !d.emittedTypes.has(t));
-    if (remaining.length > 0) {
-      chosen = d;
-      chosenType = remaining[Math.floor(Math.random() * remaining.length)];
-      break;
-    }
+// ── source windows ─────────────────────────────────────────────────
+function closeSourceWindows() {
+  for (const [k, rec] of [...state.windows]) {
+    if (rec.type === 'source') { rec.el.remove(); state.windows.delete(k); }
   }
+}
+function spawnSourceWindows(dossierId) {
+  closeSourceWindows();
+  const w = deskEl.clientWidth;
+  DOC_TYPES.forEach((t, k) => {
+    const el = makeWindow({ id:`src-${t}`, cls:'win-source', title:`${SRC_OF[t]} · ${docTypeLabel(t)}`,
+                            x: Math.max(0, w - 268), y: 14 + k * 138 });
+    el.querySelector('.win-body').innerHTML = '<div class="src-empty">awaiting telemetry…</div>';
+    state.windows.set(`src-${t}`, { type:'source', docType:t, dossierId, el });
+  });
+}
+function appendSrcRow(docType, fragment) {
+  const rec = state.windows.get(`src-${docType}`);
+  if (!rec) return;
+  const body = rec.el.querySelector('.win-body');
+  const empty = body.querySelector('.src-empty');
+  if (empty) empty.remove();
+  const row = document.createElement('div');
+  row.className = 'src-row';
+  row.dataset.fragmentId = fragment.id;
+  row.innerHTML = `<div><span style="color:var(--dim);font-size:9px">[${fragment.ts}]</span> ` +
+                  `<span class="src-obj">${fragment.object_id}</span></div>` +
+                  `<div class="src-val">${fragment.fieldStr}</div>`;
+  row.addEventListener('click', e => { e.stopPropagation(); pickupFragment(fragment); });
+  body.appendChild(row);
+  state.fragmentMap.set(fragment.id, fragment);
+  // cap rows
+  while (body.querySelectorAll('.src-row').length > 24) body.querySelector('.src-row').remove();
+  body.scrollTop = body.scrollHeight;
+}
 
-  // Second pass: if all dossiers have emitted all 4 types, reset cycles
-  if (!chosen) {
-    for (const [, d] of state.dossiers) d.emittedTypes.clear();
-    const d = state.dossiers.get(ids[0]);
-    chosen = d;
-    chosenType = DOC_TYPES[Math.floor(Math.random() * DOC_TYPES.length)];
-  }
-
-  chosen.emittedTypes.add(chosenType);
-
-  const obj    = chosen.object;
-  const src    = obj.source_attribution[chosenType];
-  const cfg    = LEVELS[state.shift.level];
-  const redact = chosenType === 'proximity' && Math.random() < cfg.redactedRate;
-  const fieldStr = formatFields(chosenType, obj.fields, redact);
-
-  const fragment = {
-    id:        fragmentCounter++,
-    ts:        feedTimestamp(),
-    source:    src,
-    object_id: obj.object_id,
-    doc_type:  chosenType,
-    fieldStr,
-    isRedacted: redact,
-    payload:   { source: src, object_id: obj.object_id, doc_type: chosenType, fields: obj.fields[chosenType] },
+// ── fragments ──────────────────────────────────────────────────────
+function makeFragment(obj, docType, redact) {
+  const src = obj.source_attribution[docType] || SRC_OF[docType];
+  return {
+    id: fragmentCounter++, ts: feedTimestamp(), source: src,
+    object_id: obj.object_id, doc_type: docType,
+    fieldStr: formatFields(docType, obj.fields, redact), isRedacted: !!redact,
   };
-
-  state.feed.push(fragment);
-  appendFeedRow(fragment);
+}
+function emitFragment() {
+  const id = state.focusedDossierId;
+  if (!id || !state.dossiers.has(id)) return;
+  const d = state.dossiers.get(id);
+  const cfg = LEVELS[state.shift.level];
+  const t = DOC_TYPES[Math.floor(Math.random() * DOC_TYPES.length)];
+  const redact = t === 'proximity' && Math.random() < cfg.redactedRate;
+  appendSrcRow(t, makeFragment(d.object, t, redact));
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  SHIFT CONTROL
-// ═══════════════════════════════════════════════════════════════════
-function startShift(level) {
-  if (state.pool.length === 0) {
-    setStatus('DATASET NOT LOADED', 'err');
+// ── carry / paste ──────────────────────────────────────────────────
+function pickupFragment(fragment) {
+  if (state.carriedFragment) {
+    const prev = deskEl.querySelector(`.src-row[data-fragment-id="${state.carriedFragment.id}"]`);
+    if (prev) prev.classList.remove('carrying');
+  }
+  state.carriedFragment = fragment;
+  const row = deskEl.querySelector(`.src-row[data-fragment-id="${fragment.id}"]`);
+  if (row) row.classList.add('carrying');
+  sfx.pickup();
+  setStatus(`CARRYING: ${fragment.object_id} [${docTypeLabel(fragment.doc_type)}] — click the matching slot on a case window`, 'warn');
+}
+function cancelCarry() {
+  if (!state.carriedFragment) return;
+  const row = deskEl.querySelector(`.src-row[data-fragment-id="${state.carriedFragment.id}"]`);
+  if (row) row.classList.remove('carrying');
+  state.carriedFragment = null;
+  setStatus('CARRY CANCELLED');
+}
+function pasteToCaseSlot(dossierId, slotType) {
+  if (!state.carriedFragment) return;
+  const d = state.dossiers.get(dossierId);
+  if (!d) return;
+  const frag = state.carriedFragment;
+  if (frag.doc_type !== slotType) {
+    sfx.reject();
+    setStatus(`TYPE MISMATCH — [${docTypeLabel(frag.doc_type)}] cannot go in ${slotType.toUpperCase()}`, 'err');
     return;
   }
+  const wrongObject = frag.object_id !== dossierId;
+  if (wrongObject) d.wrongFragments++;
+  d.pastedSlots[slotType] = { source: frag.source, fieldStr: frag.fieldStr, object_id: frag.object_id, wrongObject };
+  const row = deskEl.querySelector(`.src-row[data-fragment-id="${frag.id}"]`);
+  if (row) { row.classList.remove('carrying'); row.classList.add('consumed'); }
+  state.carriedFragment = null;
+  sfx.paste();
+  renderCaseBody(dossierId);
+  setStatus(`SOURCED ${slotType.toUpperCase()} — ${frag.source}`);
+}
 
-  // Phase 12 — close out the previous shift with a performance summary
-  // (score is cumulative across the session, so diff against the snapshot
-  // taken when that shift began).
+// ── focus / case index ─────────────────────────────────────────────
+function focusDossier(dossierId) {
+  if (!state.dossiers.has(dossierId)) return;
+  if (state.focusedDossierId === dossierId &&
+      [...state.windows.values()].some(r => r.type === 'source')) { renderCaseIndex(); return; }
+  state.focusedDossierId = dossierId;
+  state.activeDossierId  = dossierId;
+  spawnSourceWindows(dossierId);
+  const rec = state.windows.get(`case-${dossierId}`);
+  if (rec) focusWindow(rec.el);
+  renderCaseIndex();
+}
+function renderCaseIndex() {
+  const view = document.getElementById('dossiers-view');
+  if (state.dossiers.size === 0) {
+    view.innerHTML = '<div class="dossiers-placeholder">[ NO ACTIVE CASES ]<br><br>start a shift to open case windows.</div>';
+    return;
+  }
+  view.innerHTML = [...state.dossiers.keys()].map(id =>
+    `<div class="case-index-item${id === state.focusedDossierId ? ' focused' : ''}" data-idx-id="${id}">` +
+    `CASE · ${id}</div>`).join('');
+  view.querySelectorAll('[data-idx-id]').forEach(el =>
+    el.addEventListener('click', () => focusDossier(el.dataset.idxId)));
+}
+
+// ── shift control ──────────────────────────────────────────────────
+function startShift(level) {
+  if (state.pool.length === 0) { setStatus('DATASET NOT LOADED', 'err'); return; }
+
   if (state.shift.active && state.shift.scoreSnapshot) {
     const s = state.shift.scoreSnapshot;
     const delta = {
-      correct:        state.score.correct        - s.correct,
-      caution:        state.score.caution        - s.caution,
-      miss:           state.score.miss           - s.miss,
-      critical:       state.score.critical       - s.critical,
+      correct: state.score.correct - s.correct, caution: state.score.caution - s.caution,
+      miss: state.score.miss - s.miss, critical: state.score.critical - s.critical,
       wrongFragments: state.score.wrongFragments - s.wrongFragments,
     };
-    if (delta.correct + delta.caution + delta.miss + delta.critical > 0) {
+    if (delta.correct + delta.caution + delta.miss + delta.critical > 0)
       deliverMail('shift_summary', { level: state.shift.level, ...delta }, { once: false });
-    }
   }
   deliverMail('welcome');
 
-  // Stop existing shift if running
-  if (state.feedTimer)    { clearInterval(state.feedTimer);    state.feedTimer    = null; }
-  if (state.timerInterval){ clearInterval(state.timerInterval); state.timerInterval = null; }
+  if (state.feedTimer)     { clearInterval(state.feedTimer);     state.feedTimer = null; }
+  if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval = null; }
 
   const cfg = LEVELS[level];
-  state.shift.level     = level;
-  state.shift.active    = true;
-  state.shift.startedAt = Date.now();
-  state.dossiers.clear();
-  state.usedObjectIds.clear();
-  state.fragmentMap.clear();
-  state.activeDossierId = null;
-  state.carriedFragment = null;
-  state.feed = [];
-  state.feedAutoScroll = true;
-  feedRows = [];
+  state.shift.level = level; state.shift.active = true; state.shift.startedAt = Date.now();
+  state.dossiers.clear(); state.usedObjectIds.clear(); state.fragmentMap.clear();
+  state.activeDossierId = null; state.focusedDossierId = null; state.carriedFragment = null;
+
+  for (const [, rec] of state.windows) rec.el.remove();
+  state.windows.clear();
   document.getElementById('reveal-panel').classList.remove('show');
-  ['safe','monitor','dangerous'].forEach(v => document.getElementById(`vbtn-${v}`).disabled = true);
+  document.getElementById('desk-idle').style.display = 'none';
 
-  // Clear feed display
-  document.getElementById('feed-scroll').innerHTML = '';
-
-  // Pick dossiers respecting syntheticRate — guarantee 1 real PHA
   const shuffled  = arr => arr.slice().sort(() => Math.random() - 0.5);
   const hazardous = shuffled(state.pool.filter(o => !o.is_synthetic && o.true_class === 'hazardous'));
   const safe      = shuffled(state.pool.filter(o => o.true_class === 'safe'));
   const synthetic = shuffled(state.pool.filter(o => o.is_synthetic));
-
   const remaining  = cfg.dossierCount - 1;
   const nSynthetic = Math.round(remaining * cfg.syntheticRate);
   const nSafe      = remaining - nSynthetic;
-
-  let picked = [hazardous[0]];
-  picked = picked.concat(safe.slice(0, nSafe), synthetic.slice(0, nSynthetic));
+  let picked = [hazardous[0]].concat(safe.slice(0, nSafe), synthetic.slice(0, nSynthetic));
   picked = shuffled(picked).slice(0, cfg.dossierCount);
 
   const now = Date.now();
-  for (const obj of picked) {
+  picked.forEach((obj, idx) => {
     state.dossiers.set(obj.object_id, {
-      object:         obj,
-      emittedTypes:   new Set(),
-      pastedSlots:    { orbital: null, proximity: null, physical: null, probability: null },
-      status:         'pending',
-      wrongFragments: 0,
-      timer:          { startTime: now, duration: cfg.approachWindow },
+      object: obj, pastedSlots: { orbital:null, proximity:null, physical:null, probability:null },
+      status: 'pending', wrongFragments: 0, timer: { startTime: now, duration: cfg.approachWindow },
     });
-  }
+    spawnCaseWindow(obj.object_id, idx);
+  });
 
-  renderDossierList();
-  renderMonitorScreen();
-  switchTab('dossiers');
+  focusDossier(picked[0].object_id);
+  renderCaseIndex();
 
-  // Start feed + timer loop
   emitFragment();
   state.feedTimer     = setInterval(emitFragment, cfg.feedInterval);
   state.timerInterval = setInterval(updateTimers, 500);
-
-  // Snapshot the cumulative score so the next shift can summarise this one.
   state.shift.scoreSnapshot = { ...state.score };
-
-  setStatus(`LEVEL ${level} SHIFT ACTIVE — ${cfg.dossierCount} DOSSIER${cfg.dossierCount > 1 ? 'S' : ''} ASSIGNED`, 'ok');
+  setStatus(`LEVEL ${level} SHIFT ACTIVE — ${cfg.dossierCount} CASE${cfg.dossierCount > 1 ? 'S' : ''}`, 'ok');
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  CAMERA
-// ═══════════════════════════════════════════════════════════════════
-function switchCamera(target) {
-  state.cameraScreen = target;
-  document.getElementById('camera').dataset.screen = target;
-
-  if (target === 'worksheet') {
-    renderWorksheet();
-  }
-}
-
-function renderWorksheet() {
-  const id = state.activeDossierId;
-  const noD  = document.getElementById('ws-no-dossier');
-  const cont = document.getElementById('ws-dossier-content');
-
-  if (!id || !state.dossiers.has(id)) {
-    noD.style.display  = 'flex';
-    cont.style.display = 'none';
-    return;
-  }
-
-  noD.style.display  = 'none';
-  cont.style.display = 'flex';
-
-  document.getElementById('ws-dossier-id').textContent = id;
-
-  const dossier = state.dossiers.get(id);
-  const carrying = state.carriedFragment;
-  let filled = 0;
-  for (const slotType of DOC_TYPES) {
-    const slotEl = document.getElementById(`slot-${slotType}`);
-    const body   = document.getElementById(`slot-${slotType}-body`);
-    const pasted = dossier.pastedSlots[slotType];
-
-    // Reset droppable state
-    slotEl.classList.remove('droppable', 'filled-slot');
-
-    if (pasted) {
-      filled++;
-      slotEl.classList.add('has-data');
-      if (carrying) slotEl.classList.add('droppable', 'filled-slot');
-      body.className = 'ws-slot-body ws-slot-filled';
-      body.innerHTML =
-        `<span style="color:var(--dim);margin-right:6px;font-size:10px">[${pasted.source}]</span>` +
-        `<span style="color:var(--text)">${pasted.fieldStr}</span>`;
-    } else {
-      slotEl.classList.remove('has-data');
-      if (carrying && carrying.doc_type === slotType) slotEl.classList.add('droppable');
-      body.className = 'ws-slot-body ws-slot-empty';
-      body.innerHTML =
-        `<span class="ws-slot-empty-bar">░░░</span>` +
-        `<span>awaiting fragment from telemetry feed</span>`;
-    }
-  }
-  document.getElementById('ws-slots-count').textContent =
-    `${filled} / 4 slots filled${filled >= 2 ? ' — ready to issue verdict' : ' — fill ≥2 to issue verdict'}`;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  KEYBOARD
-// ═══════════════════════════════════════════════════════════════════
-document.addEventListener('keydown', e => {
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    switchCamera(state.cameraScreen === 'monitoring' ? 'worksheet' : 'monitoring');
-  }
-  if (e.key === 'Escape') {
-    if (state.carriedFragment) {
-      const row = document.querySelector(`.feed-row[data-fragment-id="${state.carriedFragment.id}"]`);
-      if (row) row.classList.remove('carrying');
-      state.carriedFragment = null;
-      if (state.cameraScreen === 'worksheet') renderWorksheet();
-      setStatus('CARRY CANCELLED');
-    }
-  }
-  if (e.key === 'm' || e.key === 'M') switchTab('mail');
-  if (e.key === '?') switchTab('help');
-
-  // Number keys 1–7: select dossier by position
-  const n = parseInt(e.key, 10);
-  if (n >= 1 && n <= 7) {
-    const ids = [...state.dossiers.keys()];
-    if (ids[n - 1]) selectDossier(ids[n - 1]);
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════
-//  MONITORING SCREEN
-// ═══════════════════════════════════════════════════════════════════
-function renderMonitorScreen() {
-  const body = document.getElementById('monitor-body');
-  if (!body) return;
-
-  if (!state.shift.active || state.dossiers.size === 0) {
-    body.innerHTML = `
-      <div class="monitor-idle">
-        <div class="monitor-art">⊙<br>◉ ● ●</div>
-        <div>NO ACTIVE SESSION</div>
-        <div style="color:var(--dim);font-size:10px;margin-top:4px">start a shift to begin</div>
-      </div>`;
-    return;
-  }
-
+function drawNextDossier() {
+  if (!state.shift.active) return;
   const cfg = LEVELS[state.shift.level];
-  const lvlNames = { 1: 'ORIENTATION', 2: 'OPERATIONAL', 3: 'CRISIS' };
-  let html = `<div class="monitor-shift-label">LEVEL ${state.shift.level} — ${lvlNames[state.shift.level]} · ${cfg.feedInterval / 1000}s/fragment · ${cfg.dossierCount} DOSSIER${cfg.dossierCount > 1 ? 'S' : ''}</div>`;
-
-  state.dossiers.forEach((dossier, id) => {
-    const isActive = id === state.activeDossierId;
-    const filled   = Object.values(dossier.pastedSlots).filter(v => v !== null).length;
-    const pips = DOC_TYPES.map(t =>
-      `<div class="dossier-slot-pip${dossier.pastedSlots[t] ? ' filled' : ''}"></div>`
-    ).join('');
-    const readyStyle = filled >= 2 ? 'color:var(--ok)' : 'color:var(--dim)';
-    let timerHtml = '';
-    if (dossier.timer) {
-      const rem  = timerRemaining(dossier);
-      const frac = rem / dossier.timer.duration;
-      const col  = timerColor(frac);
-      timerHtml = `<div class="timer-wrap" style="margin-top:5px">` +
-        `<div class="timer-bar"><div class="timer-fill" id="mcard-fill-${id}" style="width:${(frac*100).toFixed(1)}%;background:${col}"></div></div>` +
-        `<span class="timer-text" id="mcard-text-${id}" style="color:${col}">${timerText(rem)}</span>` +
-        `</div>`;
-    }
-
-    html += `
-      <div class="monitor-card${isActive ? ' active' : ''}" onclick="selectDossier('${id}')">
-        <div class="monitor-card-header">
-          <span class="monitor-card-id">${id}</span>
-          <span class="monitor-card-status" style="${readyStyle}">${filled >= 2 ? 'READY' : dossier.status.toUpperCase()}</span>
-        </div>
-        <div class="monitor-card-slots">${pips}</div>
-        ${timerHtml}
-      </div>`;
+  if (state.dossiers.size >= cfg.dossierCount) return;
+  const available = state.pool.filter(o => !state.usedObjectIds.has(o.object_id) && !state.dossiers.has(o.object_id));
+  if (available.length === 0) { setStatus('ALL OBJECTS PROCESSED — SHIFT COMPLETE', 'ok'); return; }
+  const pick = available[Math.floor(Math.random() * available.length)];
+  state.dossiers.set(pick.object_id, {
+    object: pick, pastedSlots: { orbital:null, proximity:null, physical:null, probability:null },
+    status: 'pending', wrongFragments: 0,
+    timer: { startTime: Date.now(), duration: LEVELS[state.shift.level].approachWindow },
   });
-
-  html += `<div class="monitor-hint">
-    click dossier to select · click feed fragment to carry<br>
-    <b style="color:var(--muted)">TAB</b> switches screens
-  </div>`;
-
-  body.innerHTML = html;
+  spawnCaseWindow(pick.object_id, state.dossiers.size - 1);
+  renderCaseIndex();
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  COPY-PASTE INTERACTION
-// ═══════════════════════════════════════════════════════════════════
-function pickupFragment(fragment) {
-  // Un-grey previous carry if any
-  if (state.carriedFragment) {
-    const prev = document.querySelector(`.feed-row[data-fragment-id="${state.carriedFragment.id}"]`);
-    if (prev) prev.classList.remove('carrying');
-  }
-
-  state.carriedFragment = fragment;
-
-  const row = document.querySelector(`.feed-row[data-fragment-id="${fragment.id}"]`);
-  if (row) row.classList.add('carrying');
-
-  sfx.pickup();
-  setStatus(`CARRYING: ${fragment.object_id} [${docTypeLabel(fragment.doc_type)}] — click matching slot on worksheet`, 'warn');
-  switchCamera('worksheet');
-}
-
-function pasteToSlot(slotType) {
-  if (!state.carriedFragment) return;
-
-  const id = state.activeDossierId;
-  if (!id || !state.dossiers.has(id)) return;
-
-  const frag    = state.carriedFragment;
-  const dossier = state.dossiers.get(id);
-
-  // Type mismatch — reject
-  if (frag.doc_type !== slotType) {
-    const slotEl = document.getElementById(`slot-${slotType}`);
-    slotEl.classList.remove('reject');
-    void slotEl.offsetWidth;
-    slotEl.classList.add('reject');
-    setTimeout(() => slotEl.classList.remove('reject'), 400);
-    sfx.reject();
-    setStatus(`TYPE MISMATCH — [${docTypeLabel(frag.doc_type)}] fragment cannot go in ${slotType.toUpperCase()} slot`, 'err');
-    return;
-  }
-
-  // Slot already filled — replace silently (player's choice)
-  const wrongObject = frag.object_id !== id;
-  if (wrongObject) dossier.wrongFragments++;
-
-  dossier.pastedSlots[slotType] = {
-    source:      frag.source,
-    fieldStr:    frag.fieldStr,
-    object_id:   frag.object_id,
-    wrongObject,
-  };
-
-  // Consume the row
-  const row = document.querySelector(`.feed-row[data-fragment-id="${frag.id}"]`);
-  if (row) { row.classList.remove('carrying'); row.classList.add('consumed'); }
-
-  state.carriedFragment = null;
-
-  sfx.paste();
-  renderWorksheet();
-  renderDossierList();
-  renderMonitorScreen();
-  updateVerdictButtons();
-  setStatus(`PASTED ${slotType.toUpperCase()} — SOURCE: ${frag.source}`);
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  VERDICT BUTTONS
-// ═══════════════════════════════════════════════════════════════════
-function updateVerdictButtons() {
-  const id = state.activeDossierId;
-  const dossier = id ? state.dossiers.get(id) : null;
-  const filled = dossier
-    ? Object.values(dossier.pastedSlots).filter(v => v !== null).length
-    : 0;
-  const ok = filled >= 2;
-  ['safe', 'monitor', 'dangerous'].forEach(v =>
-    document.getElementById(`vbtn-${v}`).disabled = !ok
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  VERDICT + OUTCOME
-// ═══════════════════════════════════════════════════════════════════
+// ── verdict + reveal ───────────────────────────────────────────────
 function computeOutcome(verdict, trueClass) {
   const tc = trueClass === 'hazardous' ? 'dangerous' : 'safe';
   return {
@@ -1797,232 +1562,115 @@ function computeOutcome(verdict, trueClass) {
     dangerous: { safe: 'caution',  dangerous: 'correct'  },
   }[verdict][tc];
 }
-
-function submitVerdict(verdict) {
-  const id = state.activeDossierId;
-  if (!id || !state.dossiers.has(id)) return;
-
-  const dossier = state.dossiers.get(id);
-  const outcome = computeOutcome(verdict, dossier.object.true_class);
-
-  if (outcome === 'critical') state.score.critical++;
-  else state.score[outcome]++;
-  if (dossier.wrongFragments > 0) state.score.wrongFragments += dossier.wrongFragments;
-
-  // Phase 12 — audio + milestone mail
+function submitVerdict(dossierId, verdict) {
+  const d = state.dossiers.get(dossierId);
+  if (!d) return;
+  if (Object.values(d.pastedSlots).filter(Boolean).length < 2) return;
+  const outcome = computeOutcome(verdict, d.object.true_class);
+  if (outcome === 'critical') state.score.critical++; else state.score[outcome]++;
+  if (d.wrongFragments > 0) state.score.wrongFragments += d.wrongFragments;
   sfx.verdict(verdict);
-  if (outcome === 'critical') {
-    sfx.critical();
-    deliverMail('first_critical', { id });
-  } else if (verdict === 'dangerous' && outcome === 'correct') {
-    deliverMail('first_dangerous', { id });
-  }
-
-  dossier.status = 'verdict';
-  showReveal(dossier, verdict, outcome);
+  if (outcome === 'critical') { sfx.critical(); deliverMail('first_critical', { id: dossierId }); }
+  else if (verdict === 'dangerous' && outcome === 'correct') { deliverMail('first_dangerous', { id: dossierId }); }
+  d.status = 'verdict';
+  state.pendingRevealId = dossierId;
+  showReveal(d, verdict, outcome);
 }
-
-// ═══════════════════════════════════════════════════════════════════
-//  REVEAL PANEL
-// ═══════════════════════════════════════════════════════════════════
 function showReveal(dossier, verdict, outcome, isTimeout = false) {
   const obj = dossier.object;
-
-  const outcomeSubtitles = {
-    correct:  'VERDICT CONFIRMED',
-    caution:  'SUBOPTIMAL ASSESSMENT',
-    miss:     'INCORRECT ASSESSMENT',
-    critical: 'CRITICAL MISS — THREAT UNDETECTED',
-  };
-
-  const outcomeWord = isTimeout ? 'TIMEOUT' : outcome.toUpperCase();
-  const outcomeSub  = isTimeout
-    ? (outcome === 'critical' ? 'APPROACH WINDOW CLOSED — HAZARDOUS OBJECT UNRESOLVED' : 'APPROACH WINDOW CLOSED')
-    : outcomeSubtitles[outcome];
-  const outcomeClass = isTimeout ? (outcome === 'critical' ? 'critical' : 'miss') : outcome;
-
-  document.getElementById('reveal-outcome-word').textContent = outcomeWord;
-  document.getElementById('reveal-outcome-word').className   = `reveal-outcome-word ${outcomeClass}`;
-  document.getElementById('reveal-outcome-sub').textContent  = outcomeSub;
-
+  const subtitles = { correct:'VERDICT CONFIRMED', caution:'SUBOPTIMAL ASSESSMENT', miss:'INCORRECT ASSESSMENT', critical:'CRITICAL MISS — THREAT UNDETECTED' };
+  const word = isTimeout ? 'TIMEOUT' : outcome.toUpperCase();
+  const sub  = isTimeout ? (outcome === 'critical' ? 'APPROACH WINDOW CLOSED — HAZARDOUS OBJECT UNRESOLVED' : 'APPROACH WINDOW CLOSED') : subtitles[outcome];
+  const cls  = isTimeout ? (outcome === 'critical' ? 'critical' : 'miss') : outcome;
+  document.getElementById('reveal-outcome-word').textContent = word;
+  document.getElementById('reveal-outcome-word').className   = `reveal-outcome-word ${cls}`;
+  document.getElementById('reveal-outcome-sub').textContent  = sub;
   document.getElementById('rv-id').textContent = obj.object_id;
-
-  const tcText  = obj.true_class === 'hazardous' ? 'HAZARDOUS' : 'SAFE';
-  const tcClass = obj.true_class === 'hazardous' ? 'crit' : 'ok';
-  document.getElementById('rv-true').textContent  = tcText;
-  document.getElementById('rv-true').className    = `reveal-val ${tcClass}`;
-
+  document.getElementById('rv-true').textContent  = obj.true_class === 'hazardous' ? 'HAZARDOUS' : 'SAFE';
+  document.getElementById('rv-true').className    = `reveal-val ${obj.true_class === 'hazardous' ? 'crit' : 'ok'}`;
   document.getElementById('rv-synth').textContent = obj.is_synthetic ? 'YES — borderline-SMOTE' : 'NO — real NEO';
   document.getElementById('rv-synth').className   = `reveal-val ${obj.is_synthetic ? 'warn' : ''}`;
-
-  const predText  = obj.model_prediction === 'hazardous' ? 'HAZARDOUS' : 'SAFE';
-  const predClass = obj.model_prediction === 'hazardous' ? 'crit' : 'ok';
-  document.getElementById('rv-pred').textContent = predText;
-  document.getElementById('rv-pred').className   = `reveal-val ${predClass}`;
+  document.getElementById('rv-pred').textContent = obj.model_prediction === 'hazardous' ? 'HAZARDOUS' : 'SAFE';
+  document.getElementById('rv-pred').className   = `reveal-val ${obj.model_prediction === 'hazardous' ? 'crit' : 'ok'}`;
   document.getElementById('rv-conf').textContent = `${(obj.model_confidence * 100).toFixed(1)}%`;
-
-  const vLabels = { safe: 'SAFE', monitor: 'MONITOR', dangerous: 'DANGEROUS' };
-  const vClass  = { safe: 'ok',   monitor: 'warn',    dangerous: 'crit'      };
+  const vLabels = { safe:'SAFE', monitor:'MONITOR', dangerous:'DANGEROUS' };
+  const vClass  = { safe:'ok', monitor:'warn', dangerous:'crit' };
   document.getElementById('rv-verdict').textContent = isTimeout ? 'NO VERDICT — TIMEOUT' : vLabels[verdict];
   document.getElementById('rv-verdict').className   = `reveal-val ${isTimeout ? 'crit' : vClass[verdict]}`;
-
-  const oClass = { correct: 'ok', caution: 'warn', miss: 'crit', critical: 'crit' };
   document.getElementById('rv-outcome').textContent = outcome.toUpperCase();
-  document.getElementById('rv-outcome').className   = `reveal-val ${oClass[outcome]}`;
-
-  const wrongEl = document.getElementById('rv-wrong-block');
+  document.getElementById('rv-outcome').className   = `reveal-val ${ {correct:'ok',caution:'warn',miss:'crit',critical:'crit'}[outcome] }`;
   document.getElementById('rv-wrong-count').textContent = dossier.wrongFragments;
-  wrongEl.className = `reveal-wrong-fragments${dossier.wrongFragments > 0 ? ' has-wrong' : ''}`;
-
+  document.getElementById('rv-wrong-block').className = `reveal-wrong-fragments${dossier.wrongFragments > 0 ? ' has-wrong' : ''}`;
   document.getElementById('reveal-panel').classList.add('show');
 }
-
+function closeCaseWindow(dossierId) {
+  const rec = state.windows.get(`case-${dossierId}`);
+  if (rec) { rec.el.remove(); state.windows.delete(`case-${dossierId}`); }
+}
 function dismissReveal() {
   document.getElementById('reveal-panel').classList.remove('show');
-
-  const id = state.activeDossierId;
+  const id = state.pendingRevealId;
   if (id) {
     state.usedObjectIds.add(id);
     state.dossiers.delete(id);
-    state.activeDossierId = null;
+    closeCaseWindow(id);
+    if (state.focusedDossierId === id) { state.focusedDossierId = null; closeSourceWindows(); }
+    state.pendingRevealId = null;
   }
-
-  // Reset worksheet timer to idle state
-  const wsFill = document.getElementById('ws-timer-fill');
-  const wsText = document.getElementById('ws-timer-text');
-  if (wsFill) { wsFill.style.width = '100%'; wsFill.style.background = 'var(--border)'; }
-  if (wsText) { wsText.textContent = '—'; wsText.style.color = 'var(--dim)'; }
-
-  ['safe', 'monitor', 'dangerous'].forEach(v =>
-    document.getElementById(`vbtn-${v}`).disabled = true
-  );
-
   drawNextDossier();
-  renderDossierList();
-  renderMonitorScreen();
-  switchCamera('monitoring');
-
-  const rem = state.dossiers.size;
-  setStatus(rem > 0 ? `DOSSIER CLOSED — ${rem} ACTIVE` : 'ALL DOSSIERS CLOSED');
+  const next = [...state.dossiers.keys()][0];
+  if (next) focusDossier(next);
+  else { closeSourceWindows(); document.getElementById('desk-idle').style.display = ''; }
+  renderCaseIndex();
+  setStatus(state.dossiers.size > 0 ? `CASE CLOSED — ${state.dossiers.size} ACTIVE` : 'ALL CASES CLOSED');
 }
 
-function drawNextDossier() {
-  if (!state.shift.active) return;
-  const cfg = LEVELS[state.shift.level];
-  if (state.dossiers.size >= cfg.dossierCount) return;
-
-  const available = state.pool.filter(o =>
-    !state.usedObjectIds.has(o.object_id) &&
-    !state.dossiers.has(o.object_id)
-  );
-
-  if (available.length === 0) {
-    setStatus('ALL OBJECTS PROCESSED — SHIFT COMPLETE', 'ok');
-    return;
-  }
-
-  const pick = available[Math.floor(Math.random() * available.length)];
-  state.dossiers.set(pick.object_id, {
-    object:         pick,
-    emittedTypes:   new Set(),
-    pastedSlots:    { orbital: null, proximity: null, physical: null, probability: null },
-    status:         'pending',
-    wrongFragments: 0,
-    timer:          { startTime: Date.now(), duration: LEVELS[state.shift.level].approachWindow },
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  TIMER SYSTEM
-// ═══════════════════════════════════════════════════════════════════
-function timerRemaining(dossier) {
-  return Math.max(0, dossier.timer.duration - (Date.now() - dossier.timer.startTime));
-}
-
-function timerColor(fraction) {
-  if (fraction > 0.5) return 'var(--ok)';
-  if (fraction > 0.25) return 'var(--warn)';
-  return 'var(--crit)';
-}
-
+// ── timers ─────────────────────────────────────────────────────────
+function timerRemaining(d) { return Math.max(0, d.timer.duration - (Date.now() - d.timer.startTime)); }
+function timerColor(f) { return f > 0.5 ? 'var(--ok)' : f > 0.25 ? 'var(--warn)' : 'var(--crit)'; }
 function timerText(ms) {
-  const totalSec = Math.ceil(ms / 1000);
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  const s = Math.ceil(ms / 1000);
+  return `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
 }
-
 function updateTimers() {
   if (!state.shift.active) return;
-
   const expired = [];
-
-  for (const [id, dossier] of state.dossiers) {
-    if (dossier.status !== 'pending') continue;
-
-    const rem  = timerRemaining(dossier);
-    const frac = rem / dossier.timer.duration;
-    const col  = timerColor(frac);
-    const txt  = timerText(rem);
-
-    // Dossier list timers
-    const fillEl = document.getElementById(`timer-fill-${id}`);
-    const textEl = document.getElementById(`timer-text-${id}`);
-    if (fillEl) { fillEl.style.width = `${(frac * 100).toFixed(1)}%`; fillEl.style.background = col; }
-    if (textEl) { textEl.textContent = txt; textEl.style.color = col; }
-
-    // Monitor screen card timers
-    const mcFill = document.getElementById(`mcard-fill-${id}`);
-    const mcText = document.getElementById(`mcard-text-${id}`);
-    if (mcFill) { mcFill.style.width = `${(frac * 100).toFixed(1)}%`; mcFill.style.background = col; }
-    if (mcText) { mcText.textContent = txt; mcText.style.color = col; }
-
-    // Worksheet header timer (active dossier only)
-    if (id === state.activeDossierId) {
-      const wsFill = document.getElementById('ws-timer-fill');
-      const wsText = document.getElementById('ws-timer-text');
-      if (wsFill) { wsFill.style.width = `${(frac * 100).toFixed(1)}%`; wsFill.style.background = col; }
-      if (wsText) { wsText.textContent = txt; wsText.style.color = col; }
-    }
-
+  for (const [id, d] of state.dossiers) {
+    if (d.status !== 'pending') continue;
+    const rem = timerRemaining(d), frac = rem / d.timer.duration;
+    const fill = document.getElementById(`ctf-${id}`), txt = document.getElementById(`ctt-${id}`);
+    if (fill) { fill.style.width = `${(frac * 100).toFixed(1)}%`; fill.style.background = timerColor(frac); }
+    if (txt)  { txt.textContent = timerText(rem); txt.style.color = timerColor(frac); }
     if (rem === 0) expired.push(id);
   }
-
   expired.forEach(handleTimeout);
 }
-
 function handleTimeout(id) {
-  const dossier = state.dossiers.get(id);
-  if (!dossier || dossier.status !== 'pending') return;
-
-  const outcome = computeOutcome('monitor', dossier.object.true_class);
-  dossier.status = 'timeout';
-
-  if (outcome === 'critical') state.score.critical++;
-  else state.score[outcome]++;
-
-  // Phase 12 — a hazardous object left to expire is a critical miss in
-  // everything but the scoreboard label: alarm + warning mail.
-  if (dossier.object.true_class === 'hazardous') {
-    sfx.critical();
-    deliverMail('first_critical', { id });
+  const d = state.dossiers.get(id);
+  if (!d || d.status !== 'pending') return;
+  const outcome = computeOutcome('monitor', d.object.true_class);
+  d.status = 'timeout';
+  if (outcome === 'critical') state.score.critical++; else state.score[outcome]++;
+  if (d.object.true_class === 'hazardous') { sfx.critical(); deliverMail('first_critical', { id }); }
+  else sfx.reject();
+  if (id === state.focusedDossierId || state.dossiers.size === 1) {
+    state.pendingRevealId = id;
+    showReveal(d, null, outcome, true);
   } else {
-    sfx.reject();
-  }
-
-  if (id === state.activeDossierId) {
-    showReveal(dossier, null, outcome, true);
-  } else {
-    // Not the active dossier — clean it up silently
-    state.usedObjectIds.add(id);
-    state.dossiers.delete(id);
-    drawNextDossier();
-    renderDossierList();
-    renderMonitorScreen();
-    const rem = state.dossiers.size;
-    setStatus(rem > 0 ? `DOSSIER EXPIRED — ${rem} ACTIVE` : 'ALL DOSSIERS CLOSED');
+    state.usedObjectIds.add(id); state.dossiers.delete(id); closeCaseWindow(id);
+    drawNextDossier(); renderCaseIndex();
+    setStatus(state.dossiers.size > 0 ? `CASE EXPIRED — ${state.dossiers.size} ACTIVE` : 'ALL CASES CLOSED');
   }
 }
+
+// ── keyboard ───────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') cancelCarry();
+  if (e.key === 'm' || e.key === 'M') switchTab('mail');
+  if (e.key === '?') switchTab('help');
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= 9) { const ids = [...state.dossiers.keys()]; if (ids[n - 1]) focusDossier(ids[n - 1]); }
+});
 
 // ═══════════════════════════════════════════════════════════════════
 //  SUMMON PANEL — Reference Card (Phase 12)

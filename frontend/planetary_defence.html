@@ -93,6 +93,83 @@
   @keyframes blink-fast { 0%,100%{opacity:1} 50%{opacity:0} }
   .blink { animation: blink-fast 1s step-end infinite; }
 
+  /* ============ SPLASH ============ */
+  /* Sits above the VHS overlay (z 99999) so the title screen is clean. */
+  #splash {
+    position: fixed; inset: 0; z-index: 999999;
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+    transition: opacity 0.9s ease;
+    cursor: pointer;
+  }
+  #splash.splash-out { opacity: 0; pointer-events: none; }
+  #splash-ring { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+  .ring-star {
+    position: absolute; font-family: var(--font-mono); font-size: 12px;
+    color: var(--muted); transform: translate(-50%, -50%);
+    animation: ringTwinkle 3s ease-in-out infinite;
+  }
+  @keyframes ringTwinkle { 0%,100%{opacity:0.15} 50%{opacity:0.7} }
+  #splash-content {
+    position: relative; z-index: 1;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+  }
+  #splash-art svg {
+    display: block; width: min(520px, 82vw);
+    filter: drop-shadow(0 0 14px rgba(106,172,121,0.10));
+  }
+  #splash-title {
+    font-family: var(--font-vt); font-size: 52px; letter-spacing: 8px;
+    color: var(--bright); text-shadow: 0 0 22px rgba(106,172,121,0.30);
+    margin-top: 6px; text-align: center;
+  }
+  #splash-sub {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 4px;
+    color: var(--dim); margin-top: 2px;
+  }
+  #splash-prompt {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 2px;
+    color: var(--ok); margin-top: 18px;
+    animation: blink-fast 1.2s step-end infinite;
+  }
+
+  /* ============ SUMMON PANEL (Reference Card) ============ */
+  .summon-panel {
+    position: fixed; z-index: 9000;
+    width: 320px;
+    background: var(--surface);
+    border: 1px solid var(--border-2);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+    display: none; flex-direction: column;
+  }
+  .summon-panel.show { display: flex; }
+  .summon-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 8px; background: #0d0d0d;
+    border-bottom: 1px solid var(--border-2);
+    cursor: move; user-select: none;
+  }
+  .summon-title { font-size: 10px; letter-spacing: 2px; color: var(--bright); }
+  .summon-close {
+    cursor: pointer; color: var(--dim); font-size: 12px; padding: 0 4px;
+  }
+  .summon-close:hover { color: var(--crit); }
+  .summon-body {
+    padding: 10px; font-size: 10px; color: var(--muted); line-height: 1.8;
+    max-height: 60vh; overflow-y: auto;
+  }
+  .summon-body .ref-row { margin-bottom: 8px; }
+  .summon-body b { color: var(--text); }
+  .ref-scale-title { color: var(--bright); letter-spacing: 1px; }
+  .summon-btn {
+    cursor: pointer; font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 1px; color: var(--dim);
+    background: transparent; border: 1px solid var(--border-2);
+    padding: 2px 6px;
+  }
+  .summon-btn:hover { color: var(--ok); border-color: var(--ok); }
+
   /* ============ LAYOUT ============ */
   #app {
     display: grid;
@@ -533,6 +610,37 @@
 
 <div class="vhs-overlay" aria-hidden="true"></div>
 
+<!-- ══ SUMMON PANEL — Reference Card (Phase 12) ══ -->
+<div class="summon-panel" id="refcard">
+  <div class="summon-head" id="refcard-head">
+    <span class="summon-title">◈ REFERENCE CARD — RISK SCALES</span>
+    <span class="summon-close" onclick="closeRefCard()">✕</span>
+  </div>
+  <div class="summon-body">
+    <div class="ref-row">
+      <span class="ref-scale-title">MOID</span> — Minimum Orbit Intersection Distance<br>
+      Closest possible approach between the object's orbit and Earth's.<br>
+      <b>&lt; 0.05 AU</b> (~19.5 lunar distances) flags a <b>Potentially Hazardous Object</b>.<br>
+      Smaller MOID + large diameter = higher concern.
+    </div>
+    <div class="ref-row">
+      <span class="ref-scale-title">Torino</span> — public impact-hazard scale, 0–10<br>
+      <b>0</b> no hazard · <b>1</b> routine · <b>2–4</b> meriting attention<br>
+      <b>5–7</b> threatening · <b>8–10</b> certain collision (by consequence)
+    </div>
+    <div class="ref-row">
+      <span class="ref-scale-title">Palermo</span> — technical log scale vs. background risk<br>
+      <b>&lt; -2</b> negligible · <b>-2 to 0</b> monitor<br>
+      <b>&gt; 0</b> exceeds background hazard · <b>&gt; +2</b> high priority
+    </div>
+    <div class="ref-row" style="color:var(--dim)">
+      Verdict guidance: weigh MOID and relative velocity (proximity) against
+      Torino/Palermo (probability). Disagreement between fragments is a signal —
+      check the source tags.
+    </div>
+  </div>
+</div>
+
 <div id="app">
 
   <!-- ══ HEADER ══ -->
@@ -604,6 +712,7 @@
               <div>
                 <div class="ws-dossier-label">ACTIVE DOSSIER</div>
                 <div class="ws-dossier-id" id="ws-dossier-id">—</div>
+                <button class="summon-btn" style="margin-top:4px" onclick="summonRefCard()">⊞ REF CARD</button>
               </div>
               <div style="text-align:right">
                 <div class="ws-dossier-label">APPROACH WINDOW</div>
@@ -1880,8 +1989,150 @@ function handleTimeout(id) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+//  SUMMON PANEL — Reference Card (Phase 12)
+// ═══════════════════════════════════════════════════════════════════
+function summonRefCard() {
+  const p = document.getElementById('refcard');
+  if (!p.dataset.placed) {
+    // First summon: centre it roughly over the main view.
+    p.style.left = `${Math.round(window.innerWidth / 2 - 160)}px`;
+    p.style.top  = '120px';
+    p.dataset.placed = '1';
+  }
+  p.classList.add('show');
+}
+function closeRefCard() {
+  document.getElementById('refcard').classList.remove('show');
+}
+
+// Plain mouse drag for the panel header — no library, no resize (v1 scope).
+(function initRefCardDrag() {
+  const panel = document.getElementById('refcard');
+  const head  = document.getElementById('refcard-head');
+  if (!panel || !head) return;
+  let dragging = false, offX = 0, offY = 0;
+
+  head.addEventListener('mousedown', e => {
+    dragging = true;
+    const r = panel.getBoundingClientRect();
+    offX = e.clientX - r.left;
+    offY = e.clientY - r.top;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const x = Math.max(0, Math.min(window.innerWidth  - panel.offsetWidth,  e.clientX - offX));
+    const y = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, e.clientY - offY));
+    panel.style.left = `${x}px`;
+    panel.style.top  = `${y}px`;
+  });
+  document.addEventListener('mouseup', () => { dragging = false; });
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+//  SPLASH (Phase 12)
+// ═══════════════════════════════════════════════════════════════════
+function initSplash() {
+  const el = document.createElement('div');
+  el.id = 'splash';
+
+  // Twinkling ring of monospace points around the centre.
+  const ring = document.createElement('div');
+  ring.id = 'splash-ring';
+  el.appendChild(ring);
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+  const rx = Math.min(cx, 520), ry = Math.min(cy, 320);
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2;
+    const s = document.createElement('div');
+    s.className = 'ring-star';
+    s.textContent = i % 4 === 0 ? '+' : '·';
+    s.style.left = `${cx + rx * Math.cos(a)}px`;
+    s.style.top  = `${cy + ry * Math.sin(a)}px`;
+    s.style.animationDelay = `${(i * 0.13).toFixed(2)}s`;
+    ring.appendChild(s);
+  }
+
+  const content = document.createElement('div');
+  content.id = 'splash-content';
+
+  // NEOCC-themed art: Earth limb + tracked asteroid + reticle + velocity vector.
+  const art = document.createElement('div');
+  art.id = 'splash-art';
+  art.innerHTML = `<svg viewBox="0 0 520 300" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="atmo" cx="50%" cy="100%" r="65%">
+        <stop offset="70%" stop-color="#0a140e" stop-opacity="0"/>
+        <stop offset="100%" stop-color="#6aac79" stop-opacity="0.18"/>
+      </radialGradient>
+    </defs>
+    <!-- Earth limb -->
+    <circle cx="260" cy="640" r="420" fill="#050807" stroke="#3a3a3a" stroke-width="1.4"/>
+    <circle cx="260" cy="640" r="420" fill="url(#atmo)"/>
+    <path d="M-120 250 A 420 420 0 0 1 640 250" fill="none" stroke="#555555" stroke-width="0.8" opacity="0.5"/>
+    <path d="M-60 215 A 470 470 0 0 1 590 215" fill="none" stroke="#3a3a3a" stroke-width="0.6" opacity="0.6"/>
+    <!-- Orbit arc crossing the field -->
+    <path d="M30 200 Q 300 -40 500 120" fill="none" stroke="#555555" stroke-width="0.8" stroke-dasharray="3 5" opacity="0.7"/>
+    <!-- Asteroid -->
+    <g transform="translate(330 92)">
+      <polygon points="-22,-6 -10,-20 9,-18 22,-4 18,14 2,22 -14,16 -24,4"
+               fill="#0a0a0a" stroke="#c8a235" stroke-width="1.5"/>
+      <polygon points="-8,-6 0,-10 6,-2 2,6 -6,4" fill="none" stroke="#3a3a3a" stroke-width="0.7"/>
+      <!-- velocity vector toward Earth -->
+      <line x1="20" y1="14" x2="70" y2="74" stroke="#c84040" stroke-width="1.4"/>
+      <polygon points="70,74 60,68 66,60" fill="#c84040"/>
+    </g>
+    <!-- Tracking reticle around the asteroid -->
+    <g transform="translate(330 92)" fill="none" stroke="#6aac79">
+      <circle r="40" stroke-width="1" stroke-dasharray="4 6" opacity="0.8"/>
+      <path d="M-52 -40 L-52 -52 L-40 -52" stroke-width="1.2"/>
+      <path d="M40 -52 L52 -52 L52 -40" stroke-width="1.2"/>
+      <path d="M52 40 L52 52 L40 52" stroke-width="1.2"/>
+      <path d="M-40 52 L-52 52 L-52 40" stroke-width="1.2"/>
+      <line x1="-10" y1="0" x2="10" y2="0" stroke-width="0.8"/>
+      <line x1="0" y1="-10" x2="0" y2="10" stroke-width="0.8"/>
+    </g>
+    <text x="386" y="58" font-family="'Share Tech Mono',monospace" font-size="9"
+          letter-spacing="1" fill="#6aac79">NEO · TRACKING</text>
+  </svg>`;
+  content.appendChild(art);
+
+  const title = document.createElement('div');
+  title.id = 'splash-title';
+  title.textContent = 'PLANETARY DEFENCE';
+  content.appendChild(title);
+
+  const sub = document.createElement('div');
+  sub.id = 'splash-sub';
+  sub.textContent = 'ESA · NEOCC · FRASCATI — OFFICER ON DUTY';
+  content.appendChild(sub);
+
+  const prompt = document.createElement('div');
+  prompt.id = 'splash-prompt';
+  prompt.textContent = '▸ CLICK OR PRESS ANY KEY TO BEGIN THE WATCH';
+  content.appendChild(prompt);
+
+  el.appendChild(content);
+  document.body.appendChild(el);
+
+  function dismiss() {
+    if (typeof audioCtx !== 'undefined' && audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    el.classList.add('splash-out');
+    setTimeout(() => el.remove(), 950);
+  }
+  // Small delay so an accidental carried-over click doesn't dismiss instantly.
+  setTimeout(() => {
+    document.addEventListener('keydown', dismiss, { once: true });
+    el.addEventListener('click', dismiss, { once: true });
+  }, 700);
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════════════════════
+initSplash();
 loadPool();
 </script>
 </body>

@@ -174,13 +174,13 @@
   #desk { position: relative; overflow: hidden; flex: 1; min-height: 0; }
   .win {
     position: absolute; z-index: 100;
-    background: var(--surface);
+    background: #0b0b0c;
     border: 1px solid var(--border-2);
-    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.75);
     display: flex; flex-direction: column;
     min-width: 200px; max-width: 360px;
   }
-  .win.focused { border-color: var(--muted); box-shadow: 0 10px 38px rgba(0,0,0,0.75); }
+  .win.focused { border-color: var(--muted); box-shadow: 0 12px 44px rgba(0,0,0,0.85); }
   .win-head {
     display: flex; align-items: center; justify-content: space-between;
     padding: 4px 7px; background: #0d0d0d;
@@ -272,7 +272,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .win, .src-row, .ws-slot.flash .ws-slot-body, .ws-slot.reject, #reveal-panel.show { animation: none !important; }
-    .camera-container, .case-timer-fill, .case-timer-fill { transition: none !important; }
+    .case-timer-fill { transition: none !important; }
   }
 
   /* ============ LAYOUT ============ */
@@ -326,126 +326,12 @@
     display: flex; gap: 12px; align-items: center;
   }
 
-  /* ============ TELEMETRY FEED ============ */
-  #feed-scroll {
-    flex: 1; overflow-y: auto;
-    padding: 4px 0;
-    font-size: 11px; color: var(--muted);
-  }
-  .feed-placeholder {
-    padding: 10px; color: var(--dim); font-size: 10px;
-    letter-spacing: 1px; line-height: 2;
-  }
-  .feed-row {
-    padding: 3px 10px 4px; cursor: pointer;
-    border-left: 2px solid transparent;
-    transition: background 0.08s;
-  }
-  .feed-row:hover { background: #0d0d0d; border-left-color: var(--border-2); }
-  .feed-row-line1 { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .feed-row-line2 { font-size: 11px; color: var(--text); padding-left: 2px; margin-top: 1px; word-break: break-all; }
-  .feed-ts    { color: var(--dim); }
-  .feed-dim   { color: var(--dim); }
-  .feed-src   { color: var(--muted); }
-  .feed-objid { color: var(--bright); font-weight: normal; }
-  .feed-data  { color: var(--text); }
-
   /* ============ MAIN VIEW — CAMERA SYSTEM ============ */
   #main-view {
     background: transparent; position: relative; overflow: hidden;  /* atmosphere shows through (Phase 13) */
     display: flex; flex-direction: column;
   }
 
-  /* Camera container fills main-view, double width for two screens side by side */
-  .camera-container {
-    display: flex;
-    width: 200%; height: 100%;
-    transition: transform 400ms cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .camera-container[data-screen="worksheet"] {
-    transform: translateX(-50%);
-  }
-
-  /* Each screen occupies half the container (= full main-view width) */
-  #screen-monitoring, #screen-worksheet {
-    width: 50%; height: 100%;
-    flex-shrink: 0; overflow: hidden;
-    display: flex; flex-direction: column;
-    position: relative;
-  }
-
-  /* ── SCREEN 1 — MONITORING ── */
-  .screen-header {
-    padding: 6px 12px; border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between;
-    flex-shrink: 0; font-size: 10px; letter-spacing: 2px; color: var(--muted);
-  }
-  .screen-label { color: var(--dim); }
-  .monitor-body {
-    flex: 1; overflow-y: auto;
-    padding: 16px 20px;
-    display: flex; flex-direction: column;
-    align-items: center;
-  }
-  .monitor-idle {
-    flex: 1; display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    color: var(--dim); font-size: 11px; letter-spacing: 2px;
-    text-align: center; gap: 8px;
-  }
-  .monitor-art {
-    font-family: var(--font-vt); font-size: 48px;
-    color: var(--border-2); letter-spacing: 8px; line-height: 1.1;
-  }
-  .monitor-shift-label {
-    font-size: 9px; letter-spacing: 3px; color: var(--dim);
-    margin-bottom: 14px; text-align: center;
-  }
-  .monitor-card {
-    width: 100%; max-width: 420px;
-    border: 1px solid var(--border-2); padding: 10px 14px;
-    margin-bottom: 6px; cursor: pointer; transition: all 0.12s;
-  }
-  .monitor-card:hover { border-color: var(--muted); background: #0d0d0d; }
-  .monitor-card.active { border-color: var(--bright); background: #0a0a0a; }
-  .monitor-card-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 5px;
-  }
-  .monitor-card-id { font-size: 13px; letter-spacing: 1px; color: var(--bright); }
-  .monitor-card.active .monitor-card-id { color: var(--white); }
-  .monitor-card-status { font-size: 9px; letter-spacing: 2px; color: var(--dim); }
-  .monitor-card-slots { display: flex; gap: 4px; }
-  .monitor-hint {
-    margin-top: 16px; font-size: 10px; color: var(--dim);
-    letter-spacing: 1px; text-align: center; line-height: 1.8;
-  }
-
-  /* ── SCREEN 2 — WORKSHEET ── */
-  .worksheet-header {
-    padding: 10px 16px; border-bottom: 1px solid var(--border-2);
-    flex-shrink: 0;
-  }
-  .ws-dossier-label {
-    font-size: 9px; letter-spacing: 3px; color: var(--dim);
-    margin-bottom: 2px; text-transform: uppercase;
-  }
-  .ws-dossier-id {
-    font-family: var(--font-vt); font-size: 32px;
-    letter-spacing: 4px; color: var(--white);
-  }
-  .ws-no-dossier {
-    flex: 1; display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    color: var(--dim); font-size: 11px; letter-spacing: 2px;
-    text-align: center; gap: 6px;
-  }
-
-  /* Field slots */
-  .ws-slots {
-    flex: 1; overflow-y: auto;
-    padding: 10px 16px; display: flex; flex-direction: column; gap: 8px;
-  }
   .ws-slot {
     border: 1px solid var(--border-2); background: var(--surface);
     padding: 10px 12px; cursor: default;
@@ -473,53 +359,7 @@
   .ws-slot-filled { color: var(--text); }
   .ws-slot.has-data { border-color: var(--muted); }
 
-  /* ── Timer bars ── */
-  .timer-wrap {
-    display: flex; align-items: center; gap: 6px; margin-top: 4px;
-  }
-  .timer-bar {
-    flex: 1; height: 2px; background: var(--border);
-  }
-  .timer-fill {
-    height: 100%; transition: width 0.5s linear, background 0.5s;
-  }
-  .timer-text {
-    font-size: 10px; letter-spacing: 1px; min-width: 36px; text-align: right;
-    transition: color 0.5s;
-  }
-
-  /* Worksheet approach window bar */
-  .ws-timer-row {
-    margin-top: 6px; display: flex; align-items: center; gap: 8px;
-  }
-  .ws-timer-label { font-size: 9px; letter-spacing: 2px; color: var(--dim); }
-  .ws-timer-bar   { flex: 1; height: 3px; background: var(--border); }
-  .ws-timer-fill  { height: 100%; transition: width 0.5s linear, background 0.5s; }
-  .ws-timer-text  { font-size: 11px; letter-spacing: 1px; min-width: 40px; text-align: right; font-family: var(--font-mono); }
-
-  /* ── Feed row carry states ── */
-  .feed-row.carrying { opacity: 0.45; }
-  .feed-row.consumed { opacity: 0.22; pointer-events: none; }
-
-  /* ── Slot interaction ── */
-  .ws-slot { transition: border-color 0.12s, background 0.12s; }
-  .ws-slot.droppable { border-color: var(--muted); cursor: pointer; }
-  .ws-slot.droppable:hover { border-color: var(--bright); background: #0d0d0d; }
-  .ws-slot.droppable.filled-slot { border-color: var(--border); cursor: default; }
-  .ws-slot.droppable.filled-slot:hover { background: transparent; border-color: var(--border); }
-
-  @keyframes slotReject {
-    0%   { border-color: var(--border-2); background: transparent; }
-    30%  { border-color: var(--crit);    background: #1a0000; }
-    100% { border-color: var(--border-2); background: transparent; }
-  }
-  .ws-slot.reject { animation: slotReject 0.35s ease forwards; }
-
   /* ── Verdict buttons ── */
-  .verdict-row {
-    display: flex; gap: 8px; padding: 10px 16px;
-    border-top: 1px solid var(--border-2); flex-shrink: 0;
-  }
   .verdict-btn {
     flex: 1; padding: 8px 4px;
     font-family: var(--font-mono); font-size: 11px; letter-spacing: 2px;
@@ -827,7 +667,7 @@
   <!-- ══ RIGHT — PANEL WITH TABS ══ -->
   <aside id="right-panel" class="panel">
     <div class="panel-title">
-      <span class="panel-tab active" id="tab-dossiers" onclick="switchTab('dossiers')">◈ DOSSIERS</span>
+      <span class="panel-tab active" id="tab-dossiers" onclick="switchTab('dossiers')">◈ CASES</span>
       <span class="panel-tab" id="tab-mail" onclick="switchTab('mail')">✉ MAIL <span id="mail-badge" style="display:none">●</span></span>
       <span class="panel-tab" id="tab-help" onclick="switchTab('help')">? HELP</span>
     </div>
@@ -854,35 +694,27 @@
     <!-- HELP view -->
     <div id="help-view">
 
-      <div class="help-section-title">INTERFACE OVERVIEW</div>
+      <div class="help-section-title">THE CONSOLE</div>
       <div>
-        <b class="help-key">LEFT COLUMN</b> — Telemetry Feed.<br>
-        Observatory fragments arrive in real time.<br>
-        Each line belongs to one NEO.<br>
-        Click a fragment to carry it.
-      </div>
-      <hr class="help-hr">
-
-      <div class="help-section-title">SCREENS</div>
-      <div>
-        Two logical screens, camera slides between them.
+        Your desk is a surface of draggable windows.<br>
+        Drag a window by its title bar; <b class="help-key">▁</b> collapses it.
       </div>
       <div style="margin-top:6px;color:var(--dim);font-size:10px;line-height:1.6">
-        <b style="color:var(--text)">SCREEN 1</b> — MONITORING<br>
-        &nbsp;&nbsp;dossier list · approach timeline<br>
-        <b style="color:var(--text)">SCREEN 2</b> — WORKSHEET<br>
-        &nbsp;&nbsp;active dossier · field slots · verdict
+        <b style="color:var(--text)">CASE</b> windows — one per object under review;<br>
+        &nbsp;&nbsp;hold the sub-items, ratings and verdict.<br>
+        <b style="color:var(--text)">SOURCE</b> windows — one per observatory for the<br>
+        &nbsp;&nbsp;focused case; stream that source's fragments.
       </div>
       <hr class="help-hr">
 
       <div class="help-section-title">CORE LOOP</div>
       <div style="color:var(--dim);font-size:10px;line-height:1.8">
-        1. Watch telemetry feed (Screen 1)<br>
-        2. Click a fragment → camera slides to Screen 2<br>
-        3. Click the correct slot to paste the fragment<br>
-        4. Fill ≥2 slots, then issue verdict:<br>
-        &nbsp;&nbsp;<b style="color:var(--ok)">SAFE</b> / <b style="color:var(--warn)">MONITOR</b> / <b style="color:var(--crit)">DANGEROUS</b><br>
-        5. Post-verdict reveal shows true class
+        1. Click a CASE window to focus it (its 4 SOURCE windows open)<br>
+        2. In a source window, click the fragment <b style="color:var(--text)">for that object</b><br>
+        3. Click the matching sub-item slot on the case to source it<br>
+        4. Rate each sourced item: <b style="color:var(--ok)">NOM</b> / <b style="color:var(--warn)">ELE</b> / <b style="color:var(--crit)">CRI</b><br>
+        5. Source ≥2 and rate them, then <b>ISSUE VERDICT</b> (worst-of aggregates)<br>
+        6. Beware decoys: fragments from other objects with similar values
       </div>
       <hr class="help-hr">
 
@@ -912,11 +744,10 @@
 
       <div class="help-section-title">KEYBOARD</div>
       <div style="color:var(--dim);font-size:10px;line-height:1.8">
-        <b style="color:var(--text)">TAB</b> switch screens<br>
         <b style="color:var(--text)">ESC</b> cancel carried fragment<br>
-        <b style="color:var(--text)">1/2/3</b> select dossier by position<br>
-        <b style="color:var(--text)">S</b> submit verdict<br>
-        <b style="color:var(--text)">M</b> open / close mail tab
+        <b style="color:var(--text)">1–9</b> focus case by position<br>
+        <b style="color:var(--text)">M</b> open / close mail tab<br>
+        <b style="color:var(--text)">?</b> open help
       </div>
       <hr class="help-hr">
 

@@ -1502,6 +1502,189 @@ narrative messages, summon-panels (if pursued in v1).
 
 ---
 
+# SECTION 8.1 — Milestone v1.1: Operator Console
+
+> **Status:** planned 2026-06-22, after v1 (Phases 0–12) shipped and was
+> browser-verified. This milestone is a deliberate re-vision of the *feel*
+> of the core loop, not a rewrite of its mechanics.
+
+## Why this milestone
+
+v1 is functionally complete but visually "raw": the main view is sparse and
+the worksheet reads as a tidy single-column form. That tidiness works against
+the original design intent. The fantasy is a **real operator's console** — a
+cluttered, slightly overwhelming "chest-of-screens" surface where information
+for a single verdict is scattered across **several non-parallel source
+windows** that the officer must gather, cross-check, and reconcile. The
+cognitive load of *managing the surface itself* is part of the difficulty: it
+raises the human-factor error rate that the SAFE/MONITOR/DANGEROUS judgement
+depends on. v1.1 builds that surface.
+
+This promotes two items previously deferred to v2 (see Section 9): the
+**fully-floating workstation variant** and **conflict resolution / misleading
+sources**. The draggable Reference Card summon-panel shipped in Phase 12 is the
+first building block of this paradigm.
+
+## Leading assumption (confirm before executing Phase 15+)
+
+The floating-windows surface is treated as an **evolution layered on top of**
+the existing telemetry feed + camera + worksheet, **not** a replacement of the
+feed. The feed remains the canonical Variant-a fragment stream; the worksheet's
+fixed slots evolve into draggable source/dossier windows. If the intent is
+instead to retire the feed/worksheet split entirely, Phases 15–16 need a
+different decomposition — settle this in a discuss pass first.
+
+## Ordering
+
+Cheap atmosphere and motion first (13–14, low risk, no design ambiguity), then
+the paradigm work (15–16, design-heavy — discuss before executing), then the
+final consistency pass (17). One phase at a time; pause for review at each
+boundary, as in Section 8.
+
+---
+
+## PHASE 13 — Atmosphere layer
+
+**Goal:** Make the console feel alive and powered-on, matching STELLaRUM's
+ambient presence, without touching game logic.
+
+**Inputs:** v1 complete.
+
+**Deliverables:**
+- Animated canvas background behind the main view (drifting starfield /
+  low-amplitude noise / occasional sweep), echoing STELLaRUM's `drawNoise`.
+- Ambient audio bed (low hum / room tone) gated by the existing audio toggle,
+  layered under the procedural `sfx.*` from Phase 12.
+- Background sits below all UI and the VHS overlay; never intercepts clicks.
+
+**Steps:**
+1. Add a `<canvas>` fixed behind `#app` (or inside the main view), z-index
+   below content. Render loop via `requestAnimationFrame`, throttled.
+2. Port STELLaRUM's noise/starfield pattern; tune density to the green/grey
+   palette so it reads as "instrument glow," not snow.
+3. Add an ambient `OscillatorNode`/buffer hum through a low gain into the
+   existing `audioCtx`; start on audio-enable, stop on disable.
+
+**Exit criterion:**
+- Background animates smoothly at a low CPU cost; toggling audio starts/stops
+  the hum; no interaction is blocked; no console errors.
+
+**Do NOT:**
+- Add gameplay-affecting visuals (timers, data) to the background — that is
+  Phase 15's MONITORING work.
+
+---
+
+## PHASE 14 — Motion & micro-interactions
+
+**Goal:** Add the tactile feedback layer that sells the interface.
+
+**Inputs:** Phase 13 complete.
+
+**Deliverables:**
+- Carried-fragment "ghost" element that follows the cursor between feed and
+  worksheet (specified in Section 7, not yet built), snapping into the slot.
+- Fragment-arrival animation in the feed (fade/slide-in), paste/consume
+  animation, type-mismatch shake already exists — unify timings.
+- Camera-slide and reveal-panel transitions polished (easing, no jank).
+- Respect `prefers-reduced-motion`.
+
+**Exit criterion:**
+- Carry → paste reads as continuous motion; reveal panel animates in/out;
+  reduced-motion users get instant states; clean console.
+
+**Do NOT:**
+- Introduce new windows or change layout structure (Phase 15).
+
+---
+
+## PHASE 15 — Floating workstation surface
+
+**Goal:** Replace the tidy fixed worksheet column with a draggable,
+overlapping **window surface** — the cluttered operator's desk.
+
+**Inputs:** Phase 14 complete; **discuss pass done** confirming the leading
+assumption above.
+
+**Deliverables:**
+- A reusable window-manager generalising the Phase 12 summon-panel base:
+  create / focus (z-order) / drag / close, with the Section 7 cap (max ~3–5
+  open). Single source of truth in `state.summonPanels`.
+- The active dossier's source material rendered as **separate draggable
+  windows** (one per source/doc-type, or per the discuss outcome) instead of
+  fixed slots — the player arranges them on the desk.
+- Verdict controls remain reachable but the surface is intentionally dense.
+
+**Open design questions (resolve in discuss):**
+- One window per observatory, per doc-type, or per dossier?
+- Do windows spawn automatically on dossier-open, or are they summoned?
+- How does "fill ≥2 slots to verdict" map onto windows?
+- Snap-to-grid vs. free placement; do positions persist per dossier?
+
+**Exit criterion:**
+- A dossier can be worked entirely through floating windows: gather → arrange
+  → reconcile → verdict; windows drag/focus/close; cap enforced; clean console.
+
+**Do NOT:**
+- Build the misleading/conflicting-source logic yet (Phase 16).
+
+---
+
+## PHASE 16 — Multi-source verdict & deliberate misdirection
+
+**Goal:** Deepen the Variant-a error mechanic: a verdict is composed of
+several sub-judgements, each sourced from a **non-parallel** window, and
+sources can conflict or mislead.
+
+**Inputs:** Phase 15 complete.
+
+**Deliverables:**
+- Verdict decomposed into named sub-items (e.g. proximity risk, size,
+  impact probability) each resolved from its own source window.
+- Conflicting reports: two sources disagree on a field; the player must pick
+  which to trust or flag the conflict (promotes the v2 "conflict resolution"
+  item).
+- Misdirection surfaces tuned to the level system (more conflicts / near-
+  duplicate values at higher levels), reusing the existing wrong-object
+  fragment scoring.
+
+**Open design questions (resolve in discuss):**
+- Is the final verdict still a single SAFE/MONITOR/DANGEROUS, or a composite
+  scored across sub-items?
+- How is a "correct reconciliation" defined and scored vs. the current model?
+
+**Exit criterion:**
+- A full dossier requires consulting ≥2 non-parallel windows; at least one
+  level surfaces a genuine conflict the player must resolve; scoring reflects
+  reconciliation quality; clean console.
+
+**Do NOT:**
+- Add Level 4 / emergency-protocol interrupts (still v2).
+
+---
+
+## PHASE 17 — Typography & visual consistency pass
+
+**Goal:** Lift the overall finish to STELLaRUM's refinement.
+
+**Inputs:** Phase 16 complete.
+
+**Deliverables:**
+- Spacing/rhythm audit across header, panels, windows, status bar; consistent
+  type scale and letter-spacing; every colour from the palette variables.
+- Window chrome, shadows, and borders unified; VHS overlay verified not to
+  fight any new floating element.
+- Final pass screenshot comparison against STELLaRUM.
+
+**Exit criterion:**
+- Side-by-side with STELLaRUM, Planetary reads as the same series at the same
+  polish tier; no off-palette colours; clean console.
+
+**Do NOT:**
+- Start v2 features (orbital diagram, L4, campaign mode).
+
+---
+
 # SECTION 9 — Scope split: v1 / v2 / wishlist
 
 This split is **binding**. Do not implement v2 or wishlist features
@@ -1535,9 +1718,11 @@ small or easy they seem.
   conflicting reports, mail interruptions
 - Conflict resolution mechanic: two observatories disagree on a
   field, player picks which to trust or flags conflict
+  — **PROMOTED to milestone v1.1, Phase 16 (Section 8.1)**
 - Multi-shift / campaign mode with persistent score across shifts
 - Movable / resizable dossier windows (the fully-floating workstation
-  variant — see Section 7, currently deferred)
+  variant — see Section 7)
+  — **PROMOTED to milestone v1.1, Phase 15 (Section 8.1)**
 - ADASYN as primary resampling if it wins Phase 3 ablation by a clear
   margin
 - Mobile / touch optimisation pass

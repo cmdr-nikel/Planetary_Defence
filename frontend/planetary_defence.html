@@ -178,8 +178,10 @@
     border: 1px solid var(--border-2);
     box-shadow: 0 8px 30px rgba(0,0,0,0.75);
     display: flex; flex-direction: column;
-    min-width: 200px; max-width: 360px;
+    min-width: 210px; min-height: 110px; max-width: 680px; max-height: 90vh;
+    resize: both; overflow: hidden;      /* drag the bottom-right corner to resize */
   }
+  .win.collapsed { resize: none; min-height: 0; }
   .win.focused { border-color: var(--muted); box-shadow: 0 12px 44px rgba(0,0,0,0.85); }
   .win-head {
     display: flex; align-items: center; justify-content: space-between;
@@ -193,7 +195,7 @@
   .win-ctrl { cursor: pointer; color: var(--dim); font-size: 11px; line-height: 1; }
   .win-ctrl:hover { color: var(--text); }
   .win-ctrl.win-close:hover { color: var(--crit); }
-  .win-body { padding: 7px; overflow-y: auto; }
+  .win-body { padding: 7px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
   .win.collapsed .win-body { display: none; }
 
   /* Case window */
@@ -222,7 +224,8 @@
 
   /* Source window */
   .win-source { width: 250px; }
-  .win-source .win-body { padding: 0; max-height: 230px; }
+  .win-source { height: 250px; }
+  .win-source .win-body { padding: 0; }
   .src-row {
     padding: 5px 7px; border-bottom: 1px solid var(--border);
     cursor: pointer; font-size: 10px; line-height: 1.5;
@@ -375,13 +378,22 @@
   .verdict-btn.v-dangerous:not(:disabled):hover{ border-color:var(--crit); color:var(--crit); background:#1a0000; }
 
   /* ── Post-verdict reveal panel ── */
+  /* Post-verdict results screen — a true modal ABOVE all windows (z 100000),
+     dim backdrop, centred card. */
   #reveal-panel {
-    position: absolute; inset: 0; z-index: 20;
-    background: var(--bg);
-    display: none; flex-direction: column;
-    padding: 20px 24px; overflow-y: auto;
+    position: fixed; inset: 0; z-index: 100000;
+    background: rgba(0,0,0,0.84);
+    display: none; align-items: center; justify-content: center;
+    padding: 24px; overflow-y: auto;
   }
   #reveal-panel.show { display: flex; }
+  #reveal-panel > * { width: 100%; max-width: 460px; }
+  .reveal-card {
+    width: 100%; max-width: 460px;
+    background: var(--surface); border: 1px solid var(--border-2);
+    box-shadow: 0 18px 60px rgba(0,0,0,0.8);
+    padding: 22px 26px; max-height: 88vh; overflow-y: auto;
+  }
 
   .reveal-outcome-row {
     display: flex; align-items: baseline; gap: 12px;
@@ -624,6 +636,7 @@
 
       <!-- POST-VERDICT REVEAL (modal over desk) -->
       <div id="reveal-panel">
+        <div class="reveal-card">
         <div class="reveal-outcome-row">
           <div class="reveal-outcome-word" id="reveal-outcome-word">—</div>
           <div style="font-size:10px;color:var(--dim);letter-spacing:2px" id="reveal-outcome-sub">—</div>
@@ -658,8 +671,9 @@
         </div>
 
         <div class="reveal-footer">
-          <button class="btn" style="flex:1;padding:8px" onclick="dismissReveal()">[ NEXT DOSSIER ]</button>
+          <button class="btn" style="flex:1;padding:8px" onclick="dismissReveal()">[ NEXT CASE ]</button>
         </div>
+        </div><!-- /reveal-card -->
       </div><!-- /reveal-panel -->
     </div><!-- /desk -->
   </main>
@@ -711,10 +725,11 @@
       <div style="color:var(--dim);font-size:10px;line-height:1.8">
         1. Click a CASE window to focus it (its 4 SOURCE windows open)<br>
         2. In a source window, click the fragment <b style="color:var(--text)">for that object</b><br>
+        &nbsp;&nbsp;(watch the object id — decoys carry similar values)<br>
         3. Click the matching sub-item slot on the case to source it<br>
-        4. Rate each sourced item: <b style="color:var(--ok)">NOM</b> / <b style="color:var(--warn)">ELE</b> / <b style="color:var(--crit)">CRI</b><br>
-        5. Source ≥2 and rate them, then <b>ISSUE VERDICT</b> (worst-of aggregates)<br>
-        6. Beware decoys: fragments from other objects with similar values
+        4. Source ≥2 items, then <b>SUBMIT CASE</b><br>
+        5. The system assesses the object you assembled and issues<br>
+        &nbsp;&nbsp;<b style="color:var(--ok)">SAFE</b> / <b style="color:var(--warn)">MONITOR</b> / <b style="color:var(--crit)">DANGEROUS</b> — source the wrong object, get the wrong call
       </div>
       <hr class="help-hr">
 

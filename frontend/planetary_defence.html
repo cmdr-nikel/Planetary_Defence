@@ -180,6 +180,7 @@
     display: flex; flex-direction: column;
     min-width: 210px; min-height: 110px; max-width: 680px; max-height: 90vh;
     resize: both; overflow: hidden;      /* drag the bottom-right corner to resize */
+    container-type: inline-size;          /* body text scales with window width (cqw) */
   }
   .win.collapsed { resize: none; min-height: 0; }
   .win.focused { border-color: var(--muted); box-shadow: 0 12px 44px rgba(0,0,0,0.85); }
@@ -195,16 +196,18 @@
   .win-ctrl { cursor: pointer; color: var(--dim); font-size: 11px; line-height: 1; }
   .win-ctrl:hover { color: var(--text); }
   .win-ctrl.win-close:hover { color: var(--crit); }
-  .win-body { padding: 7px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+  .win-body { padding: 7px; overflow-y: auto; flex: 1 1 auto; min-height: 0;
+              font-size: clamp(10px, 3.3cqw, 18px); }   /* scales when the window is enlarged */
   .win.collapsed .win-body { display: none; }
 
   /* Case window */
   .win-case { width: 320px; }
   .win-case .win-title { color: var(--white); }
-  .case-timer-row { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; font-size: 9px; color: var(--dim); }
+  .case-timer-row { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; font-size: 0.8em; color: var(--dim); }
   .case-timer-bar { flex: 1; height: 3px; background: var(--border); }
   .case-timer-fill { height: 100%; transition: width 0.5s linear, background 0.5s; background: var(--ok); }
-  .case-verdict-row { display: flex; gap: 4px; margin-top: 7px; }
+  .case-verdict-label { font-size: 0.7em; letter-spacing: 2px; color: var(--muted); margin-top: 9px; transition: opacity 0.2s; }
+  .case-verdict-row { display: flex; gap: 4px; margin-top: 4px; }
   /* per-sub-item rating pills (Phase 16) */
   .rate-row { display: flex; gap: 4px; padding: 4px 0 1px; }
   .rate-pill {
@@ -228,14 +231,16 @@
   .win-source .win-body { padding: 0; }
   .src-row {
     padding: 5px 7px; border-bottom: 1px solid var(--border);
-    cursor: pointer; font-size: 10px; line-height: 1.5;
+    cursor: pointer; font-size: 1em; line-height: 1.5;
     transition: background 0.08s;
   }
   .src-row:hover { background: #0d0d0d; }
   .src-row.carrying { background: #14140a; outline: 1px solid var(--warn); }
   .src-row.consumed { opacity: 0.3; pointer-events: none; }
   .src-row .src-obj { color: var(--bright); }
-  .src-row .src-val { color: var(--text); }
+  .src-row .src-val { color: var(--dim); }
+  .ws-slot-val { color: var(--dim); }
+  .num { color: var(--bright); }   /* highlighted parameter digits (readability) */
   .src-empty { padding: 10px 8px; color: var(--dim); font-size: 9px; }
 
   /* Desk idle / cases index */
@@ -344,15 +349,15 @@
     margin-bottom: 6px;
   }
   .ws-slot-label {
-    font-size: 9px; letter-spacing: 3px; color: var(--muted);
+    font-size: 0.82em; letter-spacing: 3px; color: var(--muted);
     text-transform: uppercase;
   }
   .ws-slot-tag {
-    font-size: 9px; letter-spacing: 1px; color: var(--dim);
+    font-size: 0.82em; letter-spacing: 1px; color: var(--dim);
     border: 1px solid var(--border); padding: 1px 5px;
   }
   .ws-slot-body {
-    font-size: 11px; color: var(--dim); min-height: 32px;
+    font-size: 1em; color: var(--dim); min-height: 32px;
     display: flex; align-items: center;
   }
   .ws-slot-empty { letter-spacing: 1px; }
@@ -727,9 +732,9 @@
         2. In a source window, click the fragment <b style="color:var(--text)">for that object</b><br>
         &nbsp;&nbsp;(watch the object id — decoys carry similar values)<br>
         3. Click the matching sub-item slot on the case to source it<br>
-        4. Source ≥2 items, then <b>SUBMIT CASE</b><br>
-        5. The system assesses the object you assembled and issues<br>
-        &nbsp;&nbsp;<b style="color:var(--ok)">SAFE</b> / <b style="color:var(--warn)">MONITOR</b> / <b style="color:var(--crit)">DANGEROUS</b> — source the wrong object, get the wrong call
+        4. Gather all 4 elements, then make the final call:<br>
+        &nbsp;&nbsp;<b style="color:var(--ok)">SAFE</b> / <b style="color:var(--warn)">MONITOR</b> / <b style="color:var(--crit)">DANGEROUS</b><br>
+        5. Source the wrong object and its values will mislead your call
       </div>
       <hr class="help-hr">
 
@@ -1024,6 +1029,86 @@ ${ctx.critical > 0
   : 'No critical threats slipped through. Solid watch.'}
 — Coordination`,
     };
+    case 'first_case': return {
+      from: 'NEOCC COORDINATION',
+      subject: 'First case logged',
+      body:
+`Officer,
+
+First case closed. The rhythm is simple: gather the four reports for the
+object under review, confirm every one carries the same object id, then make
+the call. Speed comes with the hours.
+
+— Coordination`,
+    };
+    case 'five_cases': return {
+      from: 'Dr. M.Ábrego · Orbit Determination',
+      subject: 'Re: cross-contamination',
+      body:
+`Hello — you don't know me, I sit two floors down in Orbit Determination.
+
+A word of warning the handbook understates: when several objects share a
+close-approach window, their fragments look almost identical. Same MOID to
+two decimals, near-identical velocity. The only thing that separates a clean
+verdict from an incident is the object id. Read it every single time.
+
+I have seen good officers clear the wrong rock. Don't be one.
+
+— Marta`,
+    };
+    case 'ten_cases': return {
+      from: 'NEOCC COORDINATION',
+      subject: 'Context — why this desk exists',
+      body:
+`Officer,
+
+Ten cases in — some context. This centre coordinates Europe's response to
+near-Earth objects. When DART struck Dimorphos in 2022 and Hera launched to
+survey the aftermath, planetary defence stopped being theoretical.
+
+Every verdict you issue feeds the same pipeline those missions rely on. The
+watch is real, even when the floor is quiet.
+
+— Coordination`,
+    };
+    case 'fifteen_cases': return {
+      from: 'NEOCC OVERSIGHT',
+      subject: 'Commendation — sustained watch',
+      body:
+`Officer,
+
+Fifteen cases held without losing the thread. Oversight has noted your
+record. The approach windows will keep tightening and the feeds will keep
+crowding — that is by design. Hold the standard.
+
+— Oversight`,
+    };
+    case 'source_discipline': return {
+      from: 'NEOCC OVERSIGHT',
+      subject: 'Notice — source discipline',
+      body:
+`Officer,
+
+Our audit flagged a worksheet assembled from more than one object. Even if
+the verdict landed, a case built on mixed sources does not hold up to review.
+
+Confirm the object id on every fragment before you slot it. One object per
+case. No exceptions.
+
+— Oversight`,
+    };
+    case 'anomaly': return {
+      from: '????????',
+      subject: '[no header]',
+      body:
+`object on your board does not match the catalogue
+the orbit we sent you is not the orbit it is on
+do not clear it
+do not flag it
+just watch where it goes
+
+— (transmission ends)`,
+    };
   }
 }
 
@@ -1076,6 +1161,18 @@ function openMail(id) {
     `<div class="mail-body-text">${msg.body}</div>`;
   renderMailList();
   updateMailBadge();
+}
+
+// Milestone narrative, STELLaRUM-style — delivered as the watch progresses.
+// deliverMail() dedups by key, so each fires once.
+function checkMailMilestones() {
+  const r = state.casesResolved || 0;
+  if (r >= 1)  deliverMail('first_case');
+  if (r >= 5)  deliverMail('five_cases');
+  if (r >= 10) deliverMail('ten_cases');
+  if (r >= 12) deliverMail('anomaly');
+  if (r >= 15) deliverMail('fifteen_cases');
+  if (state.score.wrongFragments > 0) deliverMail('source_discipline');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1193,11 +1290,17 @@ function dragify(panel, handle) {
 }
 
 // ── case windows ───────────────────────────────────────────────────
+// Wrap numeric tokens so the digits read clearly against dim labels/units.
+function highlightNums(s) {
+  if (s.indexOf('<') !== -1) return s;   // already contains markup (e.g. redacted) — leave it
+  return s.replace(/(-?\d+(?:\.\d+)?(?:e-?\d+)?)/gi, '<span class="num">$1</span>');
+}
 function slotBodyHTML(pasted) {
   if (pasted) {
     const warn = pasted.wrongObject ? ' style="color:var(--crit)"' : '';
+    const val  = pasted.wrongObject ? pasted.fieldStr : highlightNums(pasted.fieldStr);
     return `<span style="color:var(--dim);margin-right:6px;font-size:10px">[${pasted.source}·${pasted.object_id}]</span>` +
-           `<span class="ws-slot-val"${warn}>${pasted.fieldStr}</span>`;
+           `<span class="ws-slot-val"${warn}>${val}</span>`;
   }
   return `<span class="ws-slot-empty-bar">░░░</span><span>awaiting source fragment</span>`;
 }
@@ -1233,24 +1336,28 @@ function renderCaseBody(dossierId) {
     `<span id="ctt-${dossierId}">—</span></div>` +
     DOC_TYPES.map(t => caseSlotHTML(dossierId, t, d)).join('') +
     `<div class="ws-footer" id="cssc-${dossierId}" style="margin-top:6px"></div>` +
+    `<div class="case-verdict-label" id="cvl-${dossierId}">ISSUE FINAL VERDICT:</div>` +
     `<div class="case-verdict-row">` +
-    `<button class="verdict-btn v-issue" data-issue disabled>[ SUBMIT CASE ]</button></div>`;
+    `<button class="verdict-btn v-safe"      data-v="safe"      disabled>[ SAFE ]</button>` +
+    `<button class="verdict-btn v-monitor"   data-v="monitor"   disabled>[ MONITOR ]</button>` +
+    `<button class="verdict-btn v-dangerous" data-v="dangerous" disabled>[ DANGEROUS ]</button></div>`;
   DOC_TYPES.forEach(t => body.querySelector(`[data-caseslot="${t}"]`)
     .addEventListener('click', e => { e.stopPropagation(); pasteToCaseSlot(dossierId, t); }));
-  body.querySelector('[data-issue]')
-    .addEventListener('click', e => { e.stopPropagation(); submitVerdict(dossierId); });
+  body.querySelectorAll('.verdict-btn').forEach(b =>
+    b.addEventListener('click', e => { e.stopPropagation(); submitVerdict(dossierId, b.dataset.v); }));
   updateCaseVerdict(dossierId);
 }
 function updateCaseVerdict(dossierId) {
   const rec = state.windows.get(`case-${dossierId}`);
   const d = state.dossiers.get(dossierId);
   if (!rec || !d) return;
-  const filledTypes = DOC_TYPES.filter(t => d.pastedSlots[t]);
-  const ok = filledTypes.length >= 2;
-  const issue = rec.el.querySelector('[data-issue]');
-  if (issue) issue.disabled = !ok;
+  const filled = DOC_TYPES.filter(t => d.pastedSlots[t]).length;
+  const ok = filled === 4;                          // final call only after ALL elements gathered
+  rec.el.querySelectorAll('.verdict-btn').forEach(b => b.disabled = !ok);
   const sc = document.getElementById(`cssc-${dossierId}`);
-  if (sc) sc.textContent = `${filledTypes.length}/4 sourced` + (ok ? ' — ready to submit' : ' — source ≥2');
+  if (sc) sc.textContent = `${filled}/4 sourced` + (ok ? ' — make the call' : ' — gather all 4');
+  const lbl = document.getElementById(`cvl-${dossierId}`);
+  if (lbl) lbl.style.opacity = ok ? '1' : '0.4';
 }
 
 // ── source windows ─────────────────────────────────────────────────
@@ -1285,7 +1392,7 @@ function pickDecoys(obj) {
   return state.pool
     .filter(o => o.object_id !== obj.object_id)
     .sort((a, b) => Math.abs(a.fields.proximity.moid - m) - Math.abs(b.fields.proximity.moid - m))
-    .slice(0, 6);
+    .slice(0, 8);
 }
 const shuffle = a => a.slice().sort(() => Math.random() - 0.5);
 
@@ -1307,7 +1414,7 @@ function renderSourceRoster(docType, objs) {
     row.dataset.fragmentId = fragment.id;
     row.innerHTML = `<div><span style="color:var(--dim);font-size:9px">[${fragment.ts}]</span> ` +
                     `<span class="src-obj">${fragment.object_id}</span></div>` +
-                    `<div class="src-val">${fragment.fieldStr}</div>`;
+                    `<div class="src-val">${highlightNums(fragment.fieldStr)}</div>`;
     row.addEventListener('click', e => { e.stopPropagation(); pickupFragment(fragment); });
     state.fragmentMap.set(fragment.id, fragment);
     body.appendChild(row);
@@ -1328,8 +1435,8 @@ function difficulty() {
   const r = state.casesResolved || 0;
   return {
     targetCases:    Math.min(6, 1 + Math.floor(r / 3)),       // +1 concurrent case every 3 resolved
-    rotateInterval: Math.max(1400, 3200 - r * 140),           // reshuffle faster over time
-    decoyCount:     Math.min(5, Math.floor(r / 2)),           // 0 decoys at start, +1 per 2 resolved
+    rotateInterval: Math.max(1600, 3400 - r * 140),           // reshuffle faster over time
+    decoyCount:     Math.min(7, 4 + Math.floor(r / 3)),       // always a list (≥4 decoys), grows with time
     approachWindow: Math.max(45000, 150000 - r * 6000),       // tighter windows over time
     redactedRate:   r >= 6 ? 0.15 : 0,                        // occasional REDACTED MOID late on
   };
@@ -1515,16 +1622,13 @@ function assembledObjectId(d) {
   for (const [id, n] of Object.entries(counts)) if (n > bestN) { best = id; bestN = n; }
   return best;
 }
-function submitVerdict(dossierId) {
+function submitVerdict(dossierId, verdict) {
   const d = state.dossiers.get(dossierId);
-  if (!d) return;
-  if (DOC_TYPES.filter(t => d.pastedSlots[t]).length < 2) return;
-  const assembledId = assembledObjectId(d);
-  const assembled   = state.dossiers.get(dossierId).object.object_id === assembledId
-    ? d.object
-    : (state.pool.find(o => o.object_id === assembledId) || d.object);
-  const verdict = assembled.verdict;                 // program issues the assembled object's known answer
-  const truth   = d.object.verdict;                  // the focused case's true answer
+  if (!d || !verdict) return;
+  if (DOC_TYPES.filter(t => d.pastedSlots[t]).length < 4) return;   // final call only after all 4
+  // The player makes the final call; it is judged against the focused object's
+  // known truth. Sourcing decoy data misleads the judgement (and is penalised).
+  const truth   = d.object.verdict;
   const outcome = outcomeOf(verdict, truth);
   if (outcome === 'critical') state.score.critical++; else state.score[outcome]++;
   if (d.wrongFragments > 0) state.score.wrongFragments += d.wrongFragments;
@@ -1532,10 +1636,11 @@ function submitVerdict(dossierId) {
   if (outcome === 'critical') { sfx.critical(); deliverMail('first_critical', { id: dossierId }); }
   else if (verdict === 'dangerous' && outcome === 'correct') { deliverMail('first_dangerous', { id: dossierId }); }
   d.issuedVerdict = verdict;
-  d.assembledId = assembledId;
+  d.assembledId = assembledObjectId(d);
   d.status = 'verdict';
   state.pendingRevealId = dossierId;
   recordResolved();
+  checkMailMilestones();
   showReveal(d, verdict, outcome);
 }
 function showReveal(dossier, verdict, outcome, isTimeout = false) {
@@ -1637,6 +1742,7 @@ function handleTimeout(id) {
   d.status = 'timeout';
   if (outcome === 'critical') state.score.critical++; else state.score[outcome]++;
   recordResolved();
+  checkMailMilestones();
   if (d.object.verdict === 'dangerous') { sfx.critical(); deliverMail('first_critical', { id }); }
   else sfx.reject();
   if (id === state.focusedDossierId || state.dossiers.size === 1) {

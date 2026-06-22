@@ -911,13 +911,192 @@ function setStatus(msg, cls = '') {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  AUDIO STUB
+//  AUDIO — procedural Web Audio (Phase 12)
 // ═══════════════════════════════════════════════════════════════════
 let audioEnabled = false;
+let audioCtx     = null;
+
+// Lazily create / resume the AudioContext. Browsers require a user gesture
+// to start audio, so this is first reached from toggleAudio() (a click).
+function ensureAudioCtx() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) audioCtx = new AC();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// One procedural tone. freq in Hz, dur in seconds, `when` is a start offset.
+// Quick attack + exponential decay gives the retro "blip" character.
+function playTone(freq, dur = 0.08, type = 'square', gain = 0.05, when = 0) {
+  if (!audioEnabled) return;
+  const ctx = ensureAudioCtx();
+  if (!ctx) return;
+  const t0  = ctx.currentTime + when;
+  const osc = ctx.createOscillator();
+  const amp = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  amp.gain.setValueAtTime(0.0001, t0);
+  amp.gain.exponentialRampToValueAtTime(gain, t0 + 0.005);
+  amp.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(amp).connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.02);
+}
+
+// High-level sound effects keyed to game events.
+const sfx = {
+  fragment: () => playTone(660, 0.04, 'square', 0.022),                                                      // brief arrival blip
+  pickup:   () => playTone(880, 0.06, 'triangle', 0.05),
+  paste:    () => { playTone(520, 0.05, 'square', 0.05); playTone(780, 0.06, 'square', 0.045, 0.05); },      // two-step confirm
+  reject:   () => playTone(140, 0.18, 'sawtooth', 0.06),                                                     // low error buzz
+  verdict:  (v) => {
+    if      (v === 'safe')      { playTone(523, 0.10, 'sine', 0.06);     playTone(784, 0.14, 'sine', 0.05, 0.10); }      // soft rising chime
+    else if (v === 'monitor')   { playTone(440, 0.14, 'triangle', 0.05); }                                              // neutral
+    else if (v === 'dangerous') { playTone(196, 0.20, 'sawtooth', 0.06); playTone(146, 0.24, 'sawtooth', 0.05, 0.06); } // low double buzz
+  },
+  critical: () => {                                                                                          // two-tone klaxon
+    playTone(330, 0.18, 'square', 0.07);
+    playTone(247, 0.22, 'square', 0.07, 0.20);
+    playTone(330, 0.18, 'square', 0.07, 0.44);
+  },
+};
+
 function toggleAudio() {
   audioEnabled = !audioEnabled;
+  if (audioEnabled) { ensureAudioCtx(); playTone(660, 0.06, 'sine', 0.05); }
   document.getElementById('btn-audio').textContent = audioEnabled ? '[ ∿ ON ]' : '[ ∿ AUDIO ]';
   setStatus(audioEnabled ? 'AUDIO ENABLED' : 'AUDIO DISABLED');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MAIL — milestone narrative (Phase 12)
+// ═══════════════════════════════════════════════════════════════════
+state.mail         = [];          // delivered messages: { id, from, subject, time, body, read }
+state.activeMailId = null;
+let   mailCounter  = 0;
+const mailDelivered = new Set();   // milestone keys already delivered (once-only)
+
+function mailTemplate(key, ctx = {}) {
+  switch (key) {
+    case 'welcome': return {
+      from: 'NEOCC COORDINATION',
+      subject: 'Welcome to the watch floor',
+      body:
+`Officer,
+
+Welcome to the Near-Earth Object Coordination Centre. You now hold the
+watch.
+
+Fragments arrive continuously from Pan-STARRS, ATLAS, Catalina and
+JPL-CNEOS. Assemble the right fragments for each object, then issue a
+verdict before its approach window closes.
+
+Mind the source tags and the object IDs — values across objects look
+alike, and it is easy to carry a fragment from the wrong object onto a
+worksheet. That mistake is on the record, not on the telescope.
+
+Stay sharp.
+— Coordination`,
+    };
+    case 'first_dangerous': return {
+      from: 'PLANETARY DEFENCE OFFICE',
+      subject: 'Commendation — threat correctly flagged',
+      body:
+`Officer,
+
+You classified object ${ctx.id} as DANGEROUS and the call holds up against
+our independent review. This is precisely the judgement this desk exists
+to make.
+
+Logged to your record with commendation.
+— PDO`,
+    };
+    case 'first_critical': return {
+      from: 'NEOCC OVERSIGHT',
+      subject: 'WARNING — critical miss recorded',
+      body:
+`Officer,
+
+A hazardous object (${ctx.id}) was cleared as SAFE or left to time out.
+Under live conditions this is the one failure mode we do not get to walk
+back.
+
+Before clearing anything, read the proximity fragment — MOID and relative
+velocity — against the approach window. We are reviewing this shift.
+— Oversight`,
+    };
+    case 'shift_summary': return {
+      from: 'NEOCC COORDINATION',
+      subject: `Shift summary — Level ${ctx.level}`,
+      body:
+`End-of-shift performance, Level ${ctx.level}:
+
+  Correct verdicts ....... ${ctx.correct}
+  Caution (suboptimal) ... ${ctx.caution}
+  Missed ................. ${ctx.miss}
+  CRITICAL misses ........ ${ctx.critical}
+  Wrong-object fragments . ${ctx.wrongFragments}
+
+${ctx.critical > 0
+  ? 'Critical misses on this shift. Tighten verification before the next one.'
+  : 'No critical threats slipped through. Solid watch.'}
+— Coordination`,
+    };
+  }
+}
+
+function deliverMail(key, ctx = {}, { once = true } = {}) {
+  if (once && mailDelivered.has(key)) return;
+  mailDelivered.add(key);
+  const tpl = mailTemplate(key, ctx);
+  if (!tpl) return;
+  const msg = {
+    id: ++mailCounter, from: tpl.from, subject: tpl.subject,
+    time: feedTimestamp(), body: tpl.body, read: false,
+  };
+  state.mail.unshift(msg);
+  renderMailList();
+  updateMailBadge();
+  sfx.fragment();
+  if (!document.getElementById('tab-mail').classList.contains('active')) {
+    setStatus(`NEW MAIL — ${tpl.subject}`, 'warn');
+  }
+}
+
+function unreadMailCount() { return state.mail.filter(m => !m.read).length; }
+
+function updateMailBadge() {
+  document.getElementById('mail-badge').style.display = unreadMailCount() > 0 ? '' : 'none';
+}
+
+function renderMailList() {
+  const list = document.getElementById('mail-list');
+  if (state.mail.length === 0) {
+    list.innerHTML = '<div id="mail-empty">[ INBOX EMPTY ]</div>';
+    return;
+  }
+  list.innerHTML = state.mail.map(m =>
+    `<div class="mail-item${m.read ? '' : ' unread'}${m.id === state.activeMailId ? ' active' : ''}" onclick="openMail(${m.id})">` +
+      `${m.read ? '' : '<span class="mail-new">NEW</span>'}` +
+      `<div class="mail-from">${m.from}</div>` +
+      `<div class="mail-subj">${m.subject}</div>` +
+    `</div>`
+  ).join('');
+}
+
+function openMail(id) {
+  const msg = state.mail.find(m => m.id === id);
+  if (!msg) return;
+  msg.read = true;
+  state.activeMailId = id;
+  document.getElementById('mail-body').innerHTML =
+    `<div class="mail-body-header">FROM <b>${msg.from}</b><br>SUBJ <b>${msg.subject}</b><br>TIME ${msg.time} UTC</div>` +
+    `<div class="mail-body-text">${msg.body}</div>`;
+  renderMailList();
+  updateMailBadge();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1011,6 +1190,8 @@ function appendFeedRow(fragment) {
   if (state.feedAutoScroll) {
     feedEl.scrollTop = feedEl.scrollHeight;
   }
+
+  sfx.fragment();
 }
 
 // Pause auto-scroll when user scrolls up manually
@@ -1152,6 +1333,24 @@ function startShift(level) {
     return;
   }
 
+  // Phase 12 — close out the previous shift with a performance summary
+  // (score is cumulative across the session, so diff against the snapshot
+  // taken when that shift began).
+  if (state.shift.active && state.shift.scoreSnapshot) {
+    const s = state.shift.scoreSnapshot;
+    const delta = {
+      correct:        state.score.correct        - s.correct,
+      caution:        state.score.caution        - s.caution,
+      miss:           state.score.miss           - s.miss,
+      critical:       state.score.critical       - s.critical,
+      wrongFragments: state.score.wrongFragments - s.wrongFragments,
+    };
+    if (delta.correct + delta.caution + delta.miss + delta.critical > 0) {
+      deliverMail('shift_summary', { level: state.shift.level, ...delta }, { once: false });
+    }
+  }
+  deliverMail('welcome');
+
   // Stop existing shift if running
   if (state.feedTimer)    { clearInterval(state.feedTimer);    state.feedTimer    = null; }
   if (state.timerInterval){ clearInterval(state.timerInterval); state.timerInterval = null; }
@@ -1208,6 +1407,9 @@ function startShift(level) {
   emitFragment();
   state.feedTimer     = setInterval(emitFragment, cfg.feedInterval);
   state.timerInterval = setInterval(updateTimers, 500);
+
+  // Snapshot the cumulative score so the next shift can summarise this one.
+  state.shift.scoreSnapshot = { ...state.score };
 
   setStatus(`LEVEL ${level} SHIFT ACTIVE — ${cfg.dossierCount} DOSSIER${cfg.dossierCount > 1 ? 'S' : ''} ASSIGNED`, 'ok');
 }
@@ -1373,6 +1575,7 @@ function pickupFragment(fragment) {
   const row = document.querySelector(`.feed-row[data-fragment-id="${fragment.id}"]`);
   if (row) row.classList.add('carrying');
 
+  sfx.pickup();
   setStatus(`CARRYING: ${fragment.object_id} [${docTypeLabel(fragment.doc_type)}] — click matching slot on worksheet`, 'warn');
   switchCamera('worksheet');
 }
@@ -1393,6 +1596,7 @@ function pasteToSlot(slotType) {
     void slotEl.offsetWidth;
     slotEl.classList.add('reject');
     setTimeout(() => slotEl.classList.remove('reject'), 400);
+    sfx.reject();
     setStatus(`TYPE MISMATCH — [${docTypeLabel(frag.doc_type)}] fragment cannot go in ${slotType.toUpperCase()} slot`, 'err');
     return;
   }
@@ -1414,6 +1618,7 @@ function pasteToSlot(slotType) {
 
   state.carriedFragment = null;
 
+  sfx.paste();
   renderWorksheet();
   renderDossierList();
   renderMonitorScreen();
@@ -1458,6 +1663,15 @@ function submitVerdict(verdict) {
   if (outcome === 'critical') state.score.critical++;
   else state.score[outcome]++;
   if (dossier.wrongFragments > 0) state.score.wrongFragments += dossier.wrongFragments;
+
+  // Phase 12 — audio + milestone mail
+  sfx.verdict(verdict);
+  if (outcome === 'critical') {
+    sfx.critical();
+    deliverMail('first_critical', { id });
+  } else if (verdict === 'dangerous' && outcome === 'correct') {
+    deliverMail('first_dangerous', { id });
+  }
 
   dossier.status = 'verdict';
   showReveal(dossier, verdict, outcome);
@@ -1641,6 +1855,15 @@ function handleTimeout(id) {
 
   if (outcome === 'critical') state.score.critical++;
   else state.score[outcome]++;
+
+  // Phase 12 — a hazardous object left to expire is a critical miss in
+  // everything but the scoreboard label: alarm + warning mail.
+  if (dossier.object.true_class === 'hazardous') {
+    sfx.critical();
+    deliverMail('first_critical', { id });
+  } else {
+    sfx.reject();
+  }
 
   if (id === state.activeDossierId) {
     showReveal(dossier, null, outcome, true);

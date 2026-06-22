@@ -178,6 +178,13 @@
     width: 100vw; height: 100vh; height: 100dvh;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
+    position: relative; z-index: 1;   /* above #atmosphere (Phase 13) */
+  }
+
+  /* ============ ATMOSPHERE (Phase 13) ============ */
+  #atmosphere {
+    position: fixed; inset: 0; z-index: 0;
+    pointer-events: none; display: block;
   }
 
   /* ============ HEADER ============ */
@@ -240,7 +247,7 @@
 
   /* ============ MAIN VIEW — CAMERA SYSTEM ============ */
   #main-view {
-    background: var(--bg); position: relative; overflow: hidden;
+    background: transparent; position: relative; overflow: hidden;  /* atmosphere shows through (Phase 13) */
     display: flex; flex-direction: column;
   }
 
@@ -588,6 +595,8 @@
 </style>
 </head>
 <body>
+
+<canvas id="atmosphere" aria-hidden="true"></canvas>
 
 <!-- VHS SVG Chromatic Aberration Filter -->
 <svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
@@ -1073,9 +1082,36 @@ const sfx = {
   },
 };
 
+// Ambient room-tone bed: two detuned low sines (slow beat) + a faint
+// high tick, all at very low gain — "powered console" hum (Phase 13).
+let ambientNodes = null;
+function startAmbient() {
+  const ctx = ensureAudioCtx();
+  if (!ctx || ambientNodes) return;
+  const bed = ctx.createGain();
+  bed.gain.value = 0.0;
+  bed.connect(ctx.destination);
+  bed.gain.setTargetAtTime(0.05, ctx.currentTime, 1.2);   // gentle fade-in
+  const o1 = ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 55;
+  const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 58.2;
+  const g1 = ctx.createGain(); g1.gain.value = 0.5;
+  o1.connect(g1).connect(bed);
+  o2.connect(g1);
+  o1.start(); o2.start();
+  ambientNodes = { bed, o1, o2 };
+}
+function stopAmbient() {
+  if (!ambientNodes || !audioCtx) return;
+  const { bed, o1, o2 } = ambientNodes;
+  bed.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.4);
+  setTimeout(() => { try { o1.stop(); o2.stop(); } catch (e) {} }, 700);
+  ambientNodes = null;
+}
+
 function toggleAudio() {
   audioEnabled = !audioEnabled;
-  if (audioEnabled) { ensureAudioCtx(); playTone(660, 0.06, 'sine', 0.05); }
+  if (audioEnabled) { ensureAudioCtx(); playTone(660, 0.06, 'sine', 0.05); startAmbient(); }
+  else { stopAmbient(); }
   document.getElementById('btn-audio').textContent = audioEnabled ? '[ ∿ ON ]' : '[ ∿ AUDIO ]';
   setStatus(audioEnabled ? 'AUDIO ENABLED' : 'AUDIO DISABLED');
 }
@@ -2128,6 +2164,58 @@ function initSplash() {
     el.addEventListener('click', dismiss, { once: true });
   }, 700);
 }
+
+// ═══════════════════════════════════════════════════════════════════
+//  ATMOSPHERE — animated starfield behind the console (Phase 13)
+// ═══════════════════════════════════════════════════════════════════
+(function initAtmosphere() {
+  const cv  = document.getElementById('atmosphere');
+  const ctx = cv.getContext('2d');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let stars = [], W = 0, H = 0, sweep = 0, lastDraw = 0;
+
+  function resize() {
+    W = cv.width  = window.innerWidth;
+    H = cv.height = window.innerHeight;
+    const n = Math.round((W * H) / 14000);   // density scales with area
+    stars = Array.from({ length: n }, (_, i) => ({
+      x: (i * 97.13) % W,                     // deterministic spread (no Math.random dependency at load)
+      y: (i * 53.71) % H,
+      r: 0.4 + ((i * 13) % 10) / 10 * 1.1,
+      base: 0.10 + ((i * 7) % 10) / 10 * 0.28,
+      tw: ((i * 31) % 100) / 100 * Math.PI * 2,
+      vy: 0.02 + ((i * 17) % 10) / 10 * 0.05,  // slow downward drift
+    }));
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function frame(t) {
+    // throttle to ~24fps
+    if (t - lastDraw < 42) { requestAnimationFrame(frame); return; }
+    lastDraw = t;
+    ctx.clearRect(0, 0, W, H);
+    const phase = t / 1000;
+    for (const s of stars) {
+      if (!reduced) { s.y += s.vy; if (s.y > H) s.y = 0; }
+      const a = reduced ? s.base : s.base * (0.55 + 0.45 * Math.sin(phase * 1.3 + s.tw));
+      ctx.fillStyle = `rgba(150, 180, 150, ${a.toFixed(3)})`;
+      ctx.fillRect(s.x, s.y, s.r, s.r);
+    }
+    if (!reduced) {
+      // slow horizontal sensor sweep — faint green band
+      sweep = (sweep + 0.6) % (W + 240);
+      const g = ctx.createLinearGradient(sweep - 240, 0, sweep, 0);
+      g.addColorStop(0,   'rgba(106,172,121,0)');
+      g.addColorStop(0.8, 'rgba(106,172,121,0.025)');
+      g.addColorStop(1,   'rgba(106,172,121,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(sweep - 240, 0, 240, H);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
 
 // ═══════════════════════════════════════════════════════════════════
 //  INIT

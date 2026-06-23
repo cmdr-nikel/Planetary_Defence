@@ -1,0 +1,10 @@
+# Netlify deploy config — static single-file game (mirrors the STELLaRUM setup).
+# Publish the frontend/ folder so planetary_defence.html and assets/ sit at the
+# site root, then rewrite "/" to the game so it opens on the bare domain.
+[build]
+  publish = "frontend"
+
+[[redirects]]
+  from = "/"
+  to = "/planetary_defence.html"
+  status = 200

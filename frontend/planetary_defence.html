@@ -269,17 +269,18 @@
   }
   #carry-ghost.show { display: block; }
   @keyframes winIn   { from { opacity: 0; transform: translateY(-6px) scale(0.985); } to { opacity: 1; transform: none; } }
-  @keyframes srcIn   { from { opacity: 0; transform: translateX(8px); }              to { opacity: 1; transform: none; } }
+  @keyframes flipIn  { 0% { transform: rotateX(-88deg); opacity: 0; } 60% { opacity: 1; } 100% { transform: rotateX(0); opacity: 1; } }
   @keyframes slotFlash { 0% { background: #16240f; } 100% { background: transparent; } }
   @keyframes shakeX  { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-4px)} 40%,80%{transform:translateX(4px)} }
   .win        { animation: winIn 0.22s cubic-bezier(0.4,0,0.2,1); }
-  .src-row    { animation: srcIn 0.18s ease-out; }
+  /* new telemetry row flips in like a split-flap board so arrivals are noticed */
+  .src-row.flip { animation: flipIn 0.28s cubic-bezier(.2,.7,.3,1); transform-origin: top center; }
   .ws-slot.flash .ws-slot-body { animation: slotFlash 0.5s ease-out; }
   .ws-slot.reject { animation: shakeX 0.32s ease-in-out; border-color: var(--crit) !important; }
   #reveal-panel.show { animation: winIn 0.3s cubic-bezier(0.4,0,0.2,1); }
 
   @media (prefers-reduced-motion: reduce) {
-    .win, .src-row, .ws-slot.flash .ws-slot-body, .ws-slot.reject, #reveal-panel.show { animation: none !important; }
+    .win, .src-row.flip, .ws-slot.flash .ws-slot-body, .ws-slot.reject, #reveal-panel.show { animation: none !important; }
     .case-timer-fill { transition: none !important; }
   }
 
@@ -1297,10 +1298,10 @@ function highlightNums(s) {
 }
 function slotBodyHTML(pasted) {
   if (pasted) {
-    const warn = pasted.wrongObject ? ' style="color:var(--crit)"' : '';
-    const val  = pasted.wrongObject ? pasted.fieldStr : highlightNums(pasted.fieldStr);
+    // No live status colouring — a wrong-object slot looks identical, so the
+    // player can't lean on a warning to make the final call (revealed only after).
     return `<span style="color:var(--dim);margin-right:6px;font-size:10px">[${pasted.source}·${pasted.object_id}]</span>` +
-           `<span class="ws-slot-val"${warn}>${val}</span>`;
+           `<span class="ws-slot-val">${highlightNums(pasted.fieldStr)}</span>`;
   }
   return `<span class="ws-slot-empty-bar">░░░</span><span>awaiting source fragment</span>`;
 }
@@ -1369,12 +1370,15 @@ function closeSourceWindows() {
 function spawnSourceWindows(dossierId) {
   closeSourceWindows();
   const w = deskEl.clientWidth;
+  const d = state.dossiers.get(dossierId);
+  const n = difficulty().decoyCount;
   DOC_TYPES.forEach((t, k) => {
     const el = makeWindow({ id:`src-${t}`, cls:'win-source', title:`${SRC_OF[t]} · ${docTypeLabel(t)}`,
                             x: Math.max(0, w - 268), y: 14 + k * 138 });
-    state.windows.set(`src-${t}`, { type:'source', docType:t, dossierId, el });
+    const roster = [d.object, ...(d.decoys || []).slice(0, n)];
+    state.windows.set(`src-${t}`, { type:'source', docType:t, dossierId, el, roster, order: shuffle(roster), idx: 0 });
   });
-  rotateRosters();
+  for (let i = 0; i < 7; i++) sourceTick(true);   // seed the feed (no flip) so windows aren't empty
 }
 
 // ── fragments ──────────────────────────────────────────────────────
@@ -1395,39 +1399,54 @@ function pickDecoys(obj) {
     .slice(0, 8);
 }
 const shuffle = a => a.slice().sort(() => Math.random() - 0.5);
+const SRC_FEED_CAP = 32;   // bounded scrollback per source window
 
-// Source windows show a BOUNDED roster — the focused object + N decoys — the
-// same set in every window but independently shuffled per window (non-parallel
-// sources). Reshuffled in place each tick, so the needed fragment is always
-// on screen and never scrolls away (operator's round-robin idea).
-function renderSourceRoster(docType, objs) {
-  const rec = state.windows.get(`src-${docType}`);
-  if (!rec) return;
+// Append one telemetry row to a source window's growing feed. Rows are never
+// reordered once placed; the feed grows downward and auto-scrolls, capped.
+function appendSrcRow(rec, obj, animate) {
   const cfg = difficulty();
+  const redact = rec.docType === 'proximity' && cfg.redactedRate && Math.random() < cfg.redactedRate;
+  const fragment = makeFragment(obj, rec.docType, redact);
   const body = rec.el.querySelector('.win-body');
-  body.innerHTML = '';
-  objs.forEach(obj => {
-    const redact = docType === 'proximity' && cfg.redactedRate && Math.random() < cfg.redactedRate;
-    const fragment = makeFragment(obj, docType, redact);
-    const row = document.createElement('div');
-    row.className = 'src-row';
-    row.dataset.fragmentId = fragment.id;
-    row.innerHTML = `<div><span style="color:var(--dim);font-size:9px">[${fragment.ts}]</span> ` +
-                    `<span class="src-obj">${fragment.object_id}</span></div>` +
-                    `<div class="src-val">${highlightNums(fragment.fieldStr)}</div>`;
-    row.addEventListener('click', e => { e.stopPropagation(); pickupFragment(fragment); });
-    state.fragmentMap.set(fragment.id, fragment);
-    body.appendChild(row);
-  });
+  const row = document.createElement('div');
+  row.className = animate ? 'src-row flip' : 'src-row';
+  row.dataset.fragmentId = fragment.id;
+  row.innerHTML = `<div><span style="color:var(--dim);font-size:9px">[${fragment.ts}]</span> ` +
+                  `<span class="src-obj">${fragment.object_id}</span></div>` +
+                  `<div class="src-val">${highlightNums(fragment.fieldStr)}</div>`;
+  row.addEventListener('click', e => { e.stopPropagation(); pickupFragment(fragment); });
+  state.fragmentMap.set(fragment.id, fragment);
+  body.appendChild(row);
+  // Trim oldest, but never drop a row the player is currently carrying.
+  let over = body.querySelectorAll('.src-row').length - SRC_FEED_CAP;
+  for (const r of [...body.querySelectorAll('.src-row')]) {
+    if (over <= 0) break;
+    if (!r.classList.contains('carrying')) { r.remove(); over--; }
+  }
+  body.scrollTop = body.scrollHeight;
 }
-function rotateRosters() {
+
+// One feed tick: each source window emits its next object via round-robin over
+// its own shuffled roster. Round-robin guarantees the needed (focused) object
+// recurs every cycle and is never lost behind random churn — the rotation is
+// hidden inside a natural downward feed. Independent per window (non-parallel).
+function sourceTick(seed) {
   const id = state.focusedDossierId;
   if (!id || !state.dossiers.has(id)) return;
-  if (state.carriedFragment) return;                 // don't reshuffle out from under a carry
   const d = state.dossiers.get(id);
   const n = difficulty().decoyCount;
-  const roster = [d.object, ...(d.decoys || []).slice(0, n)];
-  DOC_TYPES.forEach(t => renderSourceRoster(t, shuffle(roster)));  // independent order per window
+  for (const t of DOC_TYPES) {
+    const rec = state.windows.get(`src-${t}`);
+    if (!rec) continue;
+    if (!rec.order || rec.roster.length !== n + 1) {     // difficulty changed → rebuild roster
+      rec.roster = [d.object, ...(d.decoys || []).slice(0, n)];
+      rec.order = shuffle(rec.roster); rec.idx = 0;
+    }
+    const obj = rec.order[rec.idx % rec.order.length];
+    rec.idx++;
+    if (rec.idx % rec.order.length === 0) rec.order = shuffle(rec.roster);   // reshuffle each full cycle
+    appendSrcRow(rec, obj, !seed);
+  }
 }
 
 // ── difficulty ramp (by cases resolved) ────────────────────────────
@@ -1435,7 +1454,7 @@ function difficulty() {
   const r = state.casesResolved || 0;
   return {
     targetCases:    Math.min(6, 1 + Math.floor(r / 3)),       // +1 concurrent case every 3 resolved
-    rotateInterval: Math.max(1600, 3400 - r * 140),           // reshuffle faster over time
+    rotateInterval: Math.max(1100, 2400 - r * 110),           // new arrivals; quicker over time
     decoyCount:     Math.min(7, 4 + Math.floor(r / 3)),       // always a list (≥4 decoys), grows with time
     approachWindow: Math.max(45000, 150000 - r * 6000),       // tighter windows over time
     redactedRate:   r >= 6 ? 0.15 : 0,                        // occasional REDACTED MOID late on
@@ -1444,7 +1463,7 @@ function difficulty() {
 function recordResolved() { state.casesResolved = (state.casesResolved || 0) + 1; }
 function applyDifficulty() {
   if (state.feedTimer) clearInterval(state.feedTimer);
-  state.feedTimer = setInterval(rotateRosters, difficulty().rotateInterval);
+  state.feedTimer = setInterval(sourceTick, difficulty().rotateInterval);
   fillToTarget();
 }
 function fillToTarget() {

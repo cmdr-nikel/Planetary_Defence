@@ -1246,22 +1246,52 @@ function feedTimestamp() {
 }
 
 // ── window manager ─────────────────────────────────────────────────
-function makeWindow({ id, cls, title, x, y }) {
+// ── window layout memory (localStorage) ────────────────────────────
+const WIN_LS = 'pd.layout.v1';
+function winLayoutStore() { try { return JSON.parse(localStorage.getItem(WIN_LS)) || {}; } catch (e) { return {}; } }
+function saveWinLayout(key, el) {
+  if (!key) return;
+  const s = winLayoutStore();
+  s[key] = { left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height };
+  try { localStorage.setItem(WIN_LS, JSON.stringify(s)); } catch (e) {}
+}
+function applyWinLayout(key, el) {
+  const l = key && winLayoutStore()[key];
+  if (!l) return;
+  const maxX = Math.max(0, deskEl.clientWidth  - 80);   // keep at least a sliver on-screen
+  const maxY = Math.max(0, deskEl.clientHeight - 40);
+  if (l.width)  el.style.width  = l.width;
+  if (l.height) el.style.height = l.height;
+  if (l.left)   el.style.left = `${Math.min(parseInt(l.left, 10) || 0, maxX)}px`;
+  if (l.top)    el.style.top  = `${Math.min(parseInt(l.top, 10) || 0, maxY)}px`;
+}
+
+function makeWindow({ id, cls, title, x, y, key }) {
   const el = document.createElement('div');
   el.className = `win ${cls}`;
   el.style.left = `${x}px`;
   el.style.top  = `${y}px`;
   el.dataset.winId = id;
+  if (key) el.dataset.layoutKey = key;
   el.innerHTML =
     `<div class="win-head"><span class="win-title">${title}</span>` +
     `<span class="win-ctrls"><span class="win-ctrl win-collapse" title="collapse">▁</span></span></div>` +
     `<div class="win-body"></div>`;
   deskEl.appendChild(el);
+  applyWinLayout(key, el);                 // restore saved position/size if any
   el.addEventListener('mousedown', () => focusWindow(el));
   el.querySelector('.win-collapse').addEventListener('click', e => {
     e.stopPropagation(); el.classList.toggle('collapsed');
   });
   dragify(el, el.querySelector('.win-head'));
+  // persist size changes from the resize grip (debounced via rAF)
+  if (key && window.ResizeObserver) {
+    let pending = false;
+    new ResizeObserver(() => {
+      if (pending) return; pending = true;
+      requestAnimationFrame(() => { pending = false; saveWinLayout(key, el); });
+    }).observe(el);
+  }
   focusWindow(el);
   return el;
 }
@@ -1284,7 +1314,7 @@ function dragify(panel, handle) {
       const y = Math.max(0, Math.min(deskEl.clientHeight - panel.offsetHeight, ev.clientY - dr2.top  - offY));
       panel.style.left = `${x}px`; panel.style.top = `${y}px`;
     };
-    const up = () => { dragging = false; document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    const up = () => { dragging = false; document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); saveWinLayout(panel.dataset.layoutKey, panel); };
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
   });
@@ -1317,7 +1347,7 @@ function caseSlotHTML(dossierId, t, d) {
 function spawnCaseWindow(dossierId, idx) {
   const d = state.dossiers.get(dossierId);
   const el = makeWindow({ id:`case-${dossierId}`, cls:'win win-case'.replace('win ',''), title:`CASE · ${dossierId}`,
-                          x: 24 + idx * 38, y: 18 + idx * 34 });
+                          x: 24 + idx * 38, y: 18 + idx * 34, key: `case-slot-${idx}` });
   el.classList.add('win-case');
   el.dataset.caseFor = dossierId;
   el.addEventListener('mousedown', () => focusDossier(dossierId));
@@ -1369,12 +1399,14 @@ function closeSourceWindows() {
 }
 function spawnSourceWindows(dossierId) {
   closeSourceWindows();
-  const w = deskEl.clientWidth;
+  // Robust width even if the desk hasn't laid out yet (avoids x=0 stacking the
+  // source windows behind the case window — the "no data windows" symptom).
+  const w = deskEl.clientWidth || (window.innerWidth - 260) || 900;
   const d = state.dossiers.get(dossierId);
   const n = difficulty().decoyCount;
   DOC_TYPES.forEach((t, k) => {
     const el = makeWindow({ id:`src-${t}`, cls:'win-source', title:`${SRC_OF[t]} · ${docTypeLabel(t)}`,
-                            x: Math.max(0, w - 268), y: 14 + k * 138 });
+                            x: Math.max(360, w - 268), y: 14 + k * 138, key: `src-${t}` });
     const roster = [d.object, ...(d.decoys || []).slice(0, n)];
     state.windows.set(`src-${t}`, { type:'source', docType:t, dossierId, el, roster, order: shuffle(roster), idx: 0 });
   });
